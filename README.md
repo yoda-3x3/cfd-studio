@@ -59,13 +59,22 @@ A desktop CFD app with a live preview and direct ParaView export, covering both 
   mesh, grid, and domain padding still reuses the voxelization step. Check **Force
   re-run** to bypass the cache.
 
+## Setup
+
+```bash
+python -m venv .venv
+.venv\Scripts\pip.exe install -r requirements.txt
+```
+
 ## Running it
 
 ```bash
-"C:\Users\reach\Dance\.venv\Scripts\python.exe" "C:\Users\reach\Dance\cfd_paraview_app\main.py"
+.venv\Scripts\python.exe main.py
 ```
 
-Or double-click the **CFD Studio** shortcut on the Desktop.
+On Windows this can also be wired up to a Desktop shortcut pointing `pythonw.exe` at
+`main.py` with this folder as the working directory, so it launches without a console
+window.
 
 ## First-time ParaView setup
 
