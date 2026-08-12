@@ -327,14 +327,24 @@ class OpenFoamCaseWriter:
                 refined.extend((owner, pts) for pts in quads)
                 continue
 
-            self.n_cells_smoothed += 1
             center = np.array([cx, cy, cz])
+            cell_faces = []
             for tri in surface_faces:
                 point_ids = [_weld_point(pt) for pt in tri]
+                if len(set(point_ids)) < 3:
+                    continue  # slicing produced a sliver that welding collapsed onto <3 distinct points
                 normal = np.cross(tri[1] - tri[0], tri[2] - tri[0])
                 if np.dot(normal, tri[0] - center) < 0:
                     point_ids = [point_ids[0], point_ids[2], point_ids[1]]
-                refined.append((owner, tuple(point_ids)))
+                cell_faces.append((owner, tuple(point_ids)))
+
+            if not cell_faces:
+                self.n_cells_fallback += 1
+                refined.extend((owner, pts) for pts in quads)
+                continue
+
+            self.n_cells_smoothed += 1
+            refined.extend(cell_faces)
 
         return refined
 
