@@ -5,13 +5,15 @@ add_library(cfd_solvers STATIC
     src/kernels_threaded.cpp
     src/navier_stokes_3d.cpp
     src/navier_stokes_2d.cpp
+    src/voxelizer.cpp
+    src/orientation.cpp
 )
 
 target_include_directories(cfd_solvers PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-target_link_libraries(cfd_solvers PUBLIC cfd_core Eigen3::Eigen)
+target_link_libraries(cfd_solvers PUBLIC cfd_core cfd_mesh Eigen3::Eigen)
 find_package(Threads REQUIRED)
 target_link_libraries(cfd_solvers PRIVATE Threads::Threads)
 

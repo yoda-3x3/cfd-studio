@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -15,6 +16,19 @@ struct Vec3 {
     Vec3 operator-(const Vec3& o) const { return {x - o.x, y - o.y, z - o.z}; }
     Vec3 operator*(double s) const { return {x * s, y * s, z * s}; }
 };
+
+[[nodiscard]] inline double dot(const Vec3& a, const Vec3& b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+
+[[nodiscard]] inline Vec3 cross(const Vec3& a, const Vec3& b) {
+    return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x};
+}
+
+[[nodiscard]] inline double norm(const Vec3& a) { return std::sqrt(dot(a, a)); }
+
+[[nodiscard]] inline Vec3 normalize(const Vec3& a) {
+    double n = norm(a);
+    return n > 0.0 ? a * (1.0 / n) : a;
+}
 
 // A triangle mesh: flat vertex array + one (v0,v1,v2) index triple per
 // triangle, matching trimesh's own in-memory layout closely enough that

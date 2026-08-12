@@ -10,6 +10,7 @@ add_library(cfd_mesh STATIC
     src/off_reader.cpp
     src/mesh_bvh.cpp
     src/convex_hull2d.cpp
+    src/cap_boundaries.cpp
 )
 
 target_include_directories(cfd_mesh PUBLIC

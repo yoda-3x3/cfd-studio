@@ -7,9 +7,12 @@ add_executable(cfd_tests
     solvers/test_navier_stokes_3d.cpp
     solvers/test_navier_stokes_2d.cpp
     solvers/test_navier_stokes_2d_regression.cpp
+    solvers/test_voxelizer.cpp
+    solvers/test_orientation.cpp
     mesh/test_readers.cpp
     mesh/test_mesh_bvh.cpp
     mesh/test_convex_hull2d.cpp
+    mesh/test_cap_boundaries.cpp
 )
 
 target_include_directories(cfd_tests PRIVATE
