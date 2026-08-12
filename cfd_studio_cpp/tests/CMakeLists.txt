@@ -13,6 +13,9 @@ add_executable(cfd_tests
     mesh/test_mesh_bvh.cpp
     mesh/test_convex_hull2d.cpp
     mesh/test_cap_boundaries.cpp
+    io/test_openfoam_writer.cpp
+    io/test_vtk_writer.cpp
+    io/test_run_cache.cpp
 )
 
 target_include_directories(cfd_tests PRIVATE

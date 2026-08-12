@@ -1,5 +1,7 @@
 add_library(cfd_io STATIC
-    src/placeholder.cpp
+    src/openfoam_writer.cpp
+    src/vtk_writer.cpp
+    src/run_cache.cpp
 )
 
 target_include_directories(cfd_io PUBLIC

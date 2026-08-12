@@ -11,6 +11,7 @@ add_library(cfd_mesh STATIC
     src/mesh_bvh.cpp
     src/convex_hull2d.cpp
     src/cap_boundaries.cpp
+    src/clip.cpp
 )
 
 target_include_directories(cfd_mesh PUBLIC
