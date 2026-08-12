@@ -1,20 +1,18 @@
-// Near-verbatim port of solver3d/kernels.cpp (itself a 1:1 translation of
-// solver3d/kernels.py's numba reference and the earlier kernels.f90 Fortran
-// version). Deliberately single-threaded, no threading library at all: the
-// earlier Fortran build's OpenMP version stalled on a real machine mid-
-// simulation (worker thread stuck, consistent with a fork/join issue
-// accumulating over the thousands of `!$OMP PARALLEL` region entries/exits
-// a long run produces). This backend doubles as both the small-grid-optimal
-// choice (no per-call thread-dispatch overhead) and the correctness
-// reference other backends are tested against.
+// Multi-threaded kernel backend: same numerics as kernels_scalar.cpp (via
+// the shared kernel_math.hpp helpers -- the two backends cannot silently
+// diverge in their math, only in how the outer i-loop is scheduled), the
+// outer i in [1,nx] loop of each kernel split across a persistent
+// ThreadPool (see thread_pool.hpp for why this is not OpenMP).
 #include "solvers/kernel_backend.hpp"
 
 #include <algorithm>
 #include <cmath>
+#include <thread>
 #include <vector>
 
 #include "core/grid_index.hpp"
 #include "kernel_math.hpp"
+#include "thread_pool.hpp"
 
 namespace cfd::solvers {
 namespace {
@@ -23,7 +21,12 @@ using cfd::core::idx3;
 using cfd::core::padded_total3;
 using namespace cfd::solvers::detail;
 
-void compute_rhs_scalar(
+ThreadPool& pool() {
+    static ThreadPool instance(static_cast<int>(std::max(1u, std::thread::hardware_concurrency())));
+    return instance;
+}
+
+void compute_rhs_threaded(
     const double* u, const double* v, const double* w, const std::int8_t* solid,
     double re, double dx, double dy, double dz,
     int nx, int ny, int nz,
@@ -34,7 +37,8 @@ void compute_rhs_scalar(
     std::fill(rhs_w, rhs_w + total, 0.0);
     double dx2 = dx * dx, dy2 = dy * dy, dz2 = dz * dz;
 
-    for (int i = 1; i <= nx; i++) {
+    pool().parallel_for(nx, [&](int ii) {
+        int i = ii + 1;
         for (int j = 1; j <= ny; j++) {
             for (int k = 1; k <= nz; k++) {
                 if (solid[idx3(i, j, k, ny, nz)] != 0) continue;
@@ -57,17 +61,18 @@ void compute_rhs_scalar(
                 rhs_w[c] = -(uu * dwdx + vv * dwdy + ww * dwdz) + laplacian(w, i, j, k, dx2, dy2, dz2, ny, nz) / re;
             }
         }
-    }
+    });
 }
 
-void divergence_scalar(
+void divergence_threaded(
     const double* u, const double* v, const double* w, const std::int8_t* solid,
     double dx, double dy, double dz,
     int nx, int ny, int nz,
     double* div) {
     std::size_t total = padded_total3(nx, ny, nz);
     std::fill(div, div + total, 0.0);
-    for (int i = 1; i <= nx; i++) {
+    pool().parallel_for(nx, [&](int ii) {
+        int i = ii + 1;
         for (int j = 1; j <= ny; j++) {
             for (int k = 1; k <= nz; k++) {
                 if (solid[idx3(i, j, k, ny, nz)] != 0) continue;
@@ -77,10 +82,10 @@ void divergence_scalar(
                   + (w[idx3(i, j, k + 1, ny, nz)] - w[idx3(i, j, k - 1, ny, nz)]) / (2.0 * dz);
             }
         }
-    }
+    });
 }
 
-void jacobi_pressure_solve_scalar(
+void jacobi_pressure_solve_threaded(
     const double* p0, const double* rhs, const std::int8_t* solid,
     double dx, double dy, double dz,
     int max_iters, double tol, double omega,
@@ -89,13 +94,15 @@ void jacobi_pressure_solve_scalar(
     std::size_t total = padded_total3(nx, ny, nz);
     std::vector<double> p(p0, p0 + total);
     std::vector<double> p_new(p0, p0 + total);
+    std::vector<double> row_max(static_cast<std::size_t>(nx), 0.0); // per-i local max, reduced serially after each iteration
 
     double dx2 = dx * dx, dy2 = dy * dy, dz2 = dz * dz;
     double denom = 2.0 * (1.0 / dx2 + 1.0 / dy2 + 1.0 / dz2);
     double residual = 0.0;
 
     for (int iter = 0; iter < max_iters; iter++) {
-        // Neumann BC (zero-gradient) on pressure at domain faces via ghost mirroring.
+        // Neumann BC mirroring stays serial: O(ny*nz + nx*nz + nx*ny), small
+        // relative to the O(nx*ny*nz) main loop below, not worth threading.
         for (int j = 0; j <= ny + 1; j++) {
             for (int k = 0; k <= nz + 1; k++) {
                 p[idx3(0, j, k, ny, nz)] = p[idx3(1, j, k, ny, nz)];
@@ -115,7 +122,8 @@ void jacobi_pressure_solve_scalar(
             }
         }
 
-        for (int i = 1; i <= nx; i++) {
+        pool().parallel_for(nx, [&](int ii) {
+            int i = ii + 1;
             for (int j = 1; j <= ny; j++) {
                 for (int k = 1; k <= nz; k++) {
                     std::size_t c = idx3(i, j, k, ny, nz);
@@ -130,21 +138,26 @@ void jacobi_pressure_solve_scalar(
                     p_new[c] = p[c] + omega * (val - p[c]);
                 }
             }
-        }
+        });
 
         // pin one reference cell to remove the pressure null space
         p_new[idx3(1, 1, 1, ny, nz)] = 0.0;
 
-        double max_diff = 0.0;
-        for (int i = 1; i <= nx; i++) {
+        std::fill(row_max.begin(), row_max.end(), 0.0);
+        pool().parallel_for(nx, [&](int ii) {
+            int i = ii + 1;
+            double local_max = 0.0;
             for (int j = 1; j <= ny; j++) {
                 for (int k = 1; k <= nz; k++) {
                     std::size_t c = idx3(i, j, k, ny, nz);
                     double d = std::fabs(p_new[c] - p[c]);
-                    if (d > max_diff) max_diff = d;
+                    if (d > local_max) local_max = d;
                 }
             }
-        }
+            row_max[static_cast<std::size_t>(ii)] = local_max; // each ii owned by exactly one thread/iteration -- no race
+        });
+        double max_diff = 0.0;
+        for (double m : row_max) max_diff = std::max(max_diff, m);
 
         std::swap(p, p_new);
         residual = max_diff;
@@ -155,12 +168,13 @@ void jacobi_pressure_solve_scalar(
     *residual_out = residual;
 }
 
-void correct_velocity_scalar(
+void correct_velocity_threaded(
     double* u, double* v, double* w,
     const double* p, const std::int8_t* solid,
     double dt, double dx, double dy, double dz,
     int nx, int ny, int nz) {
-    for (int i = 1; i <= nx; i++) {
+    pool().parallel_for(nx, [&](int ii) {
+        int i = ii + 1;
         for (int j = 1; j <= ny; j++) {
             for (int k = 1; k <= nz; k++) {
                 std::size_t c = idx3(i, j, k, ny, nz);
@@ -175,27 +189,25 @@ void correct_velocity_scalar(
                 w[c] -= dt * (p[idx3(i, j, k + 1, ny, nz)] - p[idx3(i, j, k - 1, ny, nz)]) / (2.0 * dz);
             }
         }
-    }
+    });
 }
 
-// Always single-threaded (see file header) -- these mirror the same
-// trivial stubs the no-OpenMP Fortran/C build used.
-void set_thread_count_scalar(int) {}
-int get_thread_count_scalar() { return 1; }
-int max_thread_count_scalar() { return 1; }
+void set_thread_count_threaded(int n) { pool().resize(n); }
+int get_thread_count_threaded() { return pool().thread_count(); }
+int max_thread_count_threaded() { return static_cast<int>(std::max(1u, std::thread::hardware_concurrency())); }
 
 } // namespace
 
-const KernelBackend& scalar_backend() {
+const KernelBackend& threaded_backend() {
     static const KernelBackend backend{
-        compute_rhs_scalar,
-        divergence_scalar,
-        jacobi_pressure_solve_scalar,
-        correct_velocity_scalar,
-        set_thread_count_scalar,
-        get_thread_count_scalar,
-        max_thread_count_scalar,
-        "scalar",
+        compute_rhs_threaded,
+        divergence_threaded,
+        jacobi_pressure_solve_threaded,
+        correct_velocity_threaded,
+        set_thread_count_threaded,
+        get_thread_count_threaded,
+        max_thread_count_threaded,
+        "threaded",
     };
     return backend;
 }

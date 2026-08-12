@@ -3,6 +3,10 @@ add_executable(cfd_tests
     core/test_connected_components.cpp
     core/test_hashing.cpp
     solvers/test_kernels_scalar.cpp
+    solvers/test_kernels_threaded.cpp
+    solvers/test_navier_stokes_3d.cpp
+    solvers/test_navier_stokes_2d.cpp
+    solvers/test_navier_stokes_2d_regression.cpp
     mesh/test_readers.cpp
     mesh/test_mesh_bvh.cpp
     mesh/test_convex_hull2d.cpp

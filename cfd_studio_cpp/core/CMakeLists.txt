@@ -1,6 +1,7 @@
 add_library(cfd_core STATIC
     src/hashing.cpp
     src/connected_components.cpp
+    src/binary_morphology.cpp
 )
 
 target_include_directories(cfd_core PUBLIC
