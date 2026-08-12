@@ -12,6 +12,7 @@ add_compile_options(-march=x86-64-v2 -mtune=generic -O3)
 
 include(cmake/Warnings.cmake)
 include(cmake/StaticRuntime.cmake)
+include(cmake/FindEmbreePrebuilt.cmake) # defines Embree::Embree + cfd_copy_embree_dlls(), used across subdirectories
 
 option(CFD_BUILD_TESTS "Build the cfd_tests unit test target" ON)
 option(CFD_BUILD_GUI "Build the Qt6 cfd_studio GUI target" OFF)

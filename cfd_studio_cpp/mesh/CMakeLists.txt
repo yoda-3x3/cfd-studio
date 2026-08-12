@@ -1,8 +1,15 @@
-# Qhull/Embree wiring lands in Phase 1/3 once mesh readers + MeshBVH are
-# actually implemented -- kept dependency-free for now so core+solvers+tests
-# can build and be verified independently of the vcpkg spike's outcome.
+find_package(Qhull CONFIG REQUIRED)
+# Embree::Embree is already defined by the top-level CMakeLists.txt's
+# include(cmake/FindEmbreePrebuilt.cmake) -- not repeated here.
+
 add_library(cfd_mesh STATIC
-    src/placeholder.cpp
+    src/mesh.cpp
+    src/stl_reader.cpp
+    src/obj_reader.cpp
+    src/ply_reader.cpp
+    src/off_reader.cpp
+    src/mesh_bvh.cpp
+    src/convex_hull2d.cpp
 )
 
 target_include_directories(cfd_mesh PUBLIC
@@ -10,6 +17,7 @@ target_include_directories(cfd_mesh PUBLIC
 )
 
 target_link_libraries(cfd_mesh PUBLIC cfd_core)
+target_link_libraries(cfd_mesh PRIVATE Qhull::qhullcpp Qhull::qhull_r Embree::Embree)
 
 cfd_apply_warnings(cfd_mesh)
 cfd_apply_static_runtime(cfd_mesh)
