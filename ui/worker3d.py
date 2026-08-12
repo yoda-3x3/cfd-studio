@@ -40,6 +40,7 @@ class Simulation3DWorker(QObject):
         wake_gap: float = 4.0,
         lateral_gap: float = 1.5,
         force_rerun: bool = False,
+        domain_mode: str = "external",
     ):
         super().__init__()
         self.mesh = mesh
@@ -55,6 +56,7 @@ class Simulation3DWorker(QObject):
         self.wake_gap = wake_gap
         self.lateral_gap = lateral_gap
         self.force_rerun = force_rerun
+        self.domain_mode = domain_mode
         self._stop_requested = False
 
     def request_stop(self):
@@ -62,9 +64,11 @@ class Simulation3DWorker(QObject):
 
     def run(self):
         try:
+            internal = self.domain_mode == "internal"
             mesh_sig = cache.mesh_signature(self.mesh)
             geom_key = cache.geometry_key(
-                mesh_sig, self.nx, self.ny, self.nz, self.inflow_gap, self.wake_gap, self.lateral_gap
+                mesh_sig, self.nx, self.ny, self.nz, self.inflow_gap, self.wake_gap, self.lateral_gap,
+                domain_mode=self.domain_mode,
             )
             run_cache_key = cache.run_key(geom_key, self.Re, self.U_in, self.n_steps, self.output_every)
 
@@ -76,9 +80,14 @@ class Simulation3DWorker(QObject):
                     return
 
             self.status.emit("Preparing geometry...")
-            geo = geometry.prepare_geometry(
-                self.mesh, inflow_gap=self.inflow_gap, wake_gap=self.wake_gap, lateral_gap=self.lateral_gap
-            )
+            if internal:
+                geo = geometry.prepare_internal_geometry(
+                    self.mesh, inflow_gap=self.inflow_gap, wake_gap=self.wake_gap
+                )
+            else:
+                geo = geometry.prepare_geometry(
+                    self.mesh, inflow_gap=self.inflow_gap, wake_gap=self.wake_gap, lateral_gap=self.lateral_gap
+                )
 
             cached_geom = None if self.force_rerun else cache.load_geometry(geom_key)
             if cached_geom is not None:
@@ -86,7 +95,10 @@ class Simulation3DWorker(QObject):
                 solid, Lx, Ly, Lz = cached_geom
             else:
                 self.status.emit(f"Voxelizing geometry onto a {self.nx}x{self.ny}x{self.nz} grid...")
-                solid = geometry.voxelize_to_grid(geo.mesh, self.nx, self.ny, self.nz, geo.Lx, geo.Ly, geo.Lz)
+                if internal:
+                    solid = geometry.voxelize_internal_to_grid(geo.mesh, self.nx, self.ny, self.nz, geo.Lx, geo.Ly, geo.Lz)
+                else:
+                    solid = geometry.voxelize_to_grid(geo.mesh, self.nx, self.ny, self.nz, geo.Lx, geo.Ly, geo.Lz)
                 Lx, Ly, Lz = geo.Lx, geo.Ly, geo.Lz
                 cache.save_geometry(geom_key, solid, Lx, Ly, Lz)
 
@@ -103,6 +115,7 @@ class Simulation3DWorker(QObject):
                 Lx=Lx, Ly=Ly, Lz=Lz,
                 Re=self.Re, U_in=self.U_in,
                 num_threads=self.num_threads,
+                domain_mode=self.domain_mode,
             )
 
             self.status.emit(f"Compiling parallel kernels for {self.num_threads} core(s) (first run only)...")
@@ -115,7 +128,7 @@ class Simulation3DWorker(QObject):
             self.status.emit("Writing OpenFOAM mesh (fitting real surface geometry to the boundary cells)...")
             writer = OpenFoamCaseWriter(
                 self.output_dir, self.nx, self.ny, self.nz, solver.dx, solver.dy, solver.dz, solid,
-                surface_mesh=geo.mesh,
+                surface_mesh=geo.mesh, domain_mode=self.domain_mode,
             )
             total = writer.n_cells_smoothed + writer.n_cells_fallback
             if total:
@@ -129,6 +142,7 @@ class Simulation3DWorker(QObject):
 
         self.status.emit("Running...")
         k_mid = self.nz // 2
+        j_mid = self.ny // 2
         min_update_interval = 0.15
         start = _time.monotonic()
         last_update_time = start
@@ -152,10 +166,20 @@ class Simulation3DWorker(QObject):
                     slice_snap = {
                         "x": solver.x,
                         "y": solver.y,
+                        "z": solver.z,
+                        # XY mid-plane slice (z = Lz/2)
                         "velocity_magnitude": fields["velocity_magnitude"][:, :, k_mid],
                         "velocity_u": fields["velocity_u"][:, :, k_mid],
                         "velocity_v": fields["velocity_v"][:, :, k_mid],
+                        "pressure": fields["pressure"][:, :, k_mid],
                         "obstacle": fields["obstacle"][:, :, k_mid],
+                        # XZ mid-plane slice (y = Ly/2) -- a second, orthogonal
+                        # view so the live preview isn't blind to spanwise/
+                        # vertical structure between updates
+                        "velocity_magnitude_xz": fields["velocity_magnitude"][:, j_mid, :],
+                        "velocity_u_xz": fields["velocity_u"][:, j_mid, :],
+                        "velocity_w_xz": fields["velocity_w"][:, j_mid, :],
+                        "obstacle_xz": fields["obstacle"][:, j_mid, :],
                     }
                     self.preview.emit(slice_snap)
                     last_update_time = now

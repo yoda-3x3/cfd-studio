@@ -37,6 +37,7 @@ class SolverConfig3D:
     pressure_tol: float = 1e-4
     pressure_omega: float = 1.0
     num_threads: Optional[int] = None
+    domain_mode: str = "external"  # "external" (open tunnel, free-slip lateral walls) | "internal" (pipe/duct, no-slip lateral walls)
 
 
 class NavierStokes3DSolver:
@@ -106,6 +107,7 @@ class NavierStokes3DSolver:
     # ------------------------------------------------------------------
     def _apply_velocity_bcs(self, u, v, w):
         U_in = self.cfg.U_in
+        internal = self.cfg.domain_mode == "internal"
 
         # -x inflow (Dirichlet, second-order ghost)
         u[0, :, :] = 2 * U_in - u[1, :, :]
@@ -117,21 +119,24 @@ class NavierStokes3DSolver:
         v[-1, :, :] = v[-2, :, :]
         w[-1, :, :] = w[-2, :, :]
 
-        # y = 0 / y = Ly: free-slip walls (v is the wall-normal component)
+        # y = 0 / y = Ly: v is the wall-normal component, always mirror-negated
+        # to zero at the wall; u/w (tangential) are zero-gradient for a
+        # free-slip "external" tunnel wall, or mirror-negated to zero for a
+        # no-slip "internal" pipe/duct wall.
         v[:, 0, :] = -v[:, 1, :]
-        u[:, 0, :] = u[:, 1, :]
-        w[:, 0, :] = w[:, 1, :]
+        u[:, 0, :] = -u[:, 1, :] if internal else u[:, 1, :]
+        w[:, 0, :] = -w[:, 1, :] if internal else w[:, 1, :]
         v[:, -1, :] = -v[:, -2, :]
-        u[:, -1, :] = u[:, -2, :]
-        w[:, -1, :] = w[:, -2, :]
+        u[:, -1, :] = -u[:, -2, :] if internal else u[:, -2, :]
+        w[:, -1, :] = -w[:, -2, :] if internal else w[:, -2, :]
 
-        # z = 0 / z = Lz: free-slip walls (w is the wall-normal component)
+        # z = 0 / z = Lz: same, with w as the wall-normal component
         w[:, :, 0] = -w[:, :, 1]
-        u[:, :, 0] = u[:, :, 1]
-        v[:, :, 0] = v[:, :, 1]
+        u[:, :, 0] = -u[:, :, 1] if internal else u[:, :, 1]
+        v[:, :, 0] = -v[:, :, 1] if internal else v[:, :, 1]
         w[:, :, -1] = -w[:, :, -2]
-        u[:, :, -1] = u[:, :, -2]
-        v[:, :, -1] = v[:, :, -2]
+        u[:, :, -1] = -u[:, :, -2] if internal else u[:, :, -2]
+        v[:, :, -1] = -v[:, :, -2] if internal else v[:, :, -2]
 
     # ------------------------------------------------------------------
     def step(self) -> float:

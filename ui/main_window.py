@@ -6,8 +6,8 @@ import os
 os.environ.setdefault("QT_API", "pyside6")
 
 import numpy as np
-from PySide6.QtCore import Qt, QThread, Slot
-from PySide6.QtGui import QAction
+from PySide6.QtCore import Qt, QSettings, QThread, Slot
+from PySide6.QtGui import QAction, QActionGroup
 from PySide6.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QScrollArea,
     QSpinBox,
     QTabWidget,
     QVBoxLayout,
@@ -37,51 +38,11 @@ from ..paraview_launcher import (
     set_paraview_path,
 )
 from ..solver.scenarios import PRESETS
+from . import theme as theme_mod
 from .tab_3d import ThreeDPanel
 from .worker import SimulationWorker
 
 APP_TITLE = "CFD Studio — 2D Incompressible Flow with ParaView"
-
-STYLESHEET = """
-QMainWindow { background: #f3f4f6; }
-QGroupBox {
-    font-weight: 600;
-    border: 1px solid #d0d3d8;
-    border-radius: 8px;
-    margin-top: 14px;
-    background: #ffffff;
-    padding-top: 6px;
-}
-QGroupBox::title {
-    subcontrol-origin: margin;
-    left: 10px;
-    padding: 0 4px;
-    color: #2b2f38;
-}
-QLabel#description { color: #5a5f6a; font-style: italic; }
-QPushButton {
-    background: #2563eb;
-    color: white;
-    border-radius: 6px;
-    padding: 7px 14px;
-    font-weight: 600;
-}
-QPushButton:hover { background: #1d4ed8; }
-QPushButton:disabled { background: #a9b4c4; }
-QPushButton#stopButton { background: #dc2626; }
-QPushButton#stopButton:hover { background: #b91c1c; }
-QPushButton#paraviewButton { background: #059669; }
-QPushButton#paraviewButton:hover { background: #047857; }
-QProgressBar {
-    border: 1px solid #d0d3d8;
-    border-radius: 6px;
-    text-align: center;
-    background: #eef0f3;
-    height: 18px;
-}
-QProgressBar::chunk { background-color: #2563eb; border-radius: 6px; }
-QStatusBar { background: #e5e7eb; }
-"""
 
 
 class MainWindow(QMainWindow):
@@ -89,15 +50,19 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle(APP_TITLE)
         self.resize(1280, 820)
-        self.setStyleSheet(STYLESHEET)
 
         self._thread: QThread | None = None
         self._worker: SimulationWorker | None = None
         self._last_pvd_path: str | None = None
+        self._settings = QSettings("CFDStudio", "CFDStudio")
+        self._theme = theme_mod.THEMES[theme_mod.DEFAULT_THEME_KEY]  # so anything built before _apply_theme() has a theme to read
 
         self._build_menu()
         self._build_ui()
         self._on_scenario_changed()
+
+        saved_key = self._settings.value("theme", theme_mod.DEFAULT_THEME_KEY)
+        self._apply_theme(saved_key if saved_key in theme_mod.THEMES else theme_mod.DEFAULT_THEME_KEY)
 
     # ------------------------------------------------------------------
     def _build_menu(self):
@@ -106,10 +71,37 @@ class MainWindow(QMainWindow):
         locate_action.triggered.connect(self._locate_paraview)
         settings_menu.addAction(locate_action)
 
+        theme_menu = self.menuBar().addMenu("&Theme")
+        self._theme_actions = {}
+        theme_group = QActionGroup(self)
+        theme_group.setExclusive(True)
+        for key, th in theme_mod.THEMES.items():
+            action = QAction(th.label, self, checkable=True)
+            action.triggered.connect(lambda checked, k=key: self._apply_theme(k))
+            theme_group.addAction(action)
+            theme_menu.addAction(action)
+            self._theme_actions[key] = action
+
         help_menu = self.menuBar().addMenu("&Help")
         about_action = QAction("About", self)
         about_action.triggered.connect(self._show_about)
         help_menu.addAction(about_action)
+
+    # ------------------------------------------------------------------
+    def _apply_theme(self, key: str):
+        th = theme_mod.THEMES[key]
+        self.setStyleSheet(theme_mod.build_stylesheet(th))
+        self._theme = th
+        if hasattr(self, "_theme_actions"):
+            action = self._theme_actions.get(key)
+            if action is not None:
+                action.setChecked(True)
+        if hasattr(self, "figure"):
+            theme_mod.apply_theme_to_figure(self.figure, th)
+            self.canvas.draw_idle()
+        if hasattr(self, "three_d_panel"):
+            self.three_d_panel.set_theme(th)
+        self._settings.setValue("theme", key)
 
     # ------------------------------------------------------------------
     def _build_ui(self):
@@ -121,7 +113,15 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         scenarios_tab = QWidget()
         scenarios_layout = QHBoxLayout(scenarios_tab)
-        scenarios_layout.addWidget(self._build_left_panel(), 0)
+
+        left_scroll = QScrollArea()
+        left_scroll.setWidget(self._build_left_panel())
+        left_scroll.setWidgetResizable(True)
+        left_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        left_scroll.setFrameShape(QScrollArea.NoFrame)
+        left_scroll.setFixedWidth(360 + 22)
+        scenarios_layout.addWidget(left_scroll, 0)
+
         scenarios_layout.addWidget(self._build_right_panel(), 1)
         self.tabs.addTab(scenarios_tab, "2D Flow Scenarios")
 
@@ -270,6 +270,7 @@ class MainWindow(QMainWindow):
         self.ax_residual.set_yscale("log")
         self._residual_xs: list[int] = []
         self._residual_ys: list[float] = []
+        theme_mod.apply_theme_to_figure(self.figure, self._theme)
         self.canvas.draw_idle()
 
     # ------------------------------------------------------------------
@@ -379,11 +380,12 @@ class MainWindow(QMainWindow):
         self._residual_xs.append(step)
         self._residual_ys.append(max(residual, 1e-16))
         self.ax_residual.cla()
-        self.ax_residual.plot(self._residual_xs, self._residual_ys, color="#2563eb")
+        self.ax_residual.plot(self._residual_xs, self._residual_ys, color=self._theme.accent)
         self.ax_residual.set_title("Convergence (streamfunction residual)")
         self.ax_residual.set_xlabel("Step")
         self.ax_residual.set_ylabel("Residual")
         self.ax_residual.set_yscale("log")
+        theme_mod.apply_theme_to_axes(self.ax_residual, self._theme)
         self.canvas.draw_idle()
 
     @Slot(object)
@@ -412,6 +414,7 @@ class MainWindow(QMainWindow):
         self.ax_field.set_xlabel("x")
         self.ax_field.set_ylabel("y")
         self.ax_field.set_aspect("equal")
+        theme_mod.apply_theme_to_axes(self.ax_field, self._theme)
         self.canvas.draw_idle()
 
     @Slot(str)

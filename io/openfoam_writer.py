@@ -94,9 +94,10 @@ class _Patch:
 class OpenFoamCaseWriter:
     def __init__(
         self, case_dir: str, nx: int, ny: int, nz: int, dx: float, dy: float, dz: float, solid_mask: np.ndarray,
-        surface_mesh=None,
+        surface_mesh=None, domain_mode: str = "external",
     ):
         self.case_dir = case_dir
+        self.domain_mode = domain_mode
         self.nx, self.ny, self.nz = nx, ny, nz
         self.dx, self.dy, self.dz = dx, dy, dz
         self.solid_mask = solid_mask  # shape (nx, ny, nz), True = solid
@@ -268,6 +269,32 @@ class OpenFoamCaseWriter:
         next_point_id = (self.nx + 1) * (self.ny + 1) * (self.nz + 1) + len(self._extra_points)
         mesh_is_volume = bool(self.surface_mesh.is_volume)
 
+        # Weld coincident points instead of minting a fresh point ID per
+        # triangle-corner: two triangles from the same cell's clip (or
+        # from neighboring cells, sharing a cut along their common cell
+        # boundary) meet at genuinely identical 3D locations, but without
+        # welding every triangle becomes its own disconnected island —
+        # OpenFOAM/ParaView's cell-to-point field interpolation then has
+        # no shared vertex to blend across, so the surface renders as
+        # blocky/faceted patches of solid color (one per owner cell)
+        # instead of a smooth field over a connected surface. Rounding to
+        # 9 decimals is many orders of magnitude looser than float64
+        # round-off at these coordinate scales, but far tighter than any
+        # real surface feature, so it only ever merges truly-coincident
+        # points.
+        point_id_by_coord: Dict[Tuple[float, float, float], int] = {}
+
+        def _weld_point(coord: np.ndarray) -> int:
+            nonlocal next_point_id
+            key = tuple(np.round(coord, 9))
+            pid = point_id_by_coord.get(key)
+            if pid is None:
+                pid = next_point_id
+                point_id_by_coord[key] = pid
+                self._extra_points.append(coord)
+                next_point_id += 1
+            return pid
+
         for owner, quads in by_owner.items():
             i, j, k = self._cell_ijk[owner]
             cx, cy, cz = (i + 0.5) * dx, (j + 0.5) * dy, (k + 0.5) * dz
@@ -303,9 +330,7 @@ class OpenFoamCaseWriter:
             self.n_cells_smoothed += 1
             center = np.array([cx, cy, cz])
             for tri in surface_faces:
-                point_ids = list(range(next_point_id, next_point_id + 3))
-                self._extra_points.extend(tri)
-                next_point_id += 3
+                point_ids = [_weld_point(pt) for pt in tri]
                 normal = np.cross(tri[1] - tri[0], tri[2] - tri[0])
                 if np.dot(normal, tri[0] - center) < 0:
                     point_ids = [point_ids[0], point_ids[2], point_ids[1]]
@@ -426,6 +451,9 @@ class OpenFoamCaseWriter:
             elif p.name == "outlet":
                 lines.append("        type            zeroGradient;")
             elif p.name == "object":
+                lines.append("        type            noSlip;")
+            elif self.domain_mode == "internal":
+                # internal (pipe/duct) flow: the lateral box faces are the pipe wall, not an open tunnel boundary
                 lines.append("        type            noSlip;")
             else:
                 lines.append("        type            slip;")

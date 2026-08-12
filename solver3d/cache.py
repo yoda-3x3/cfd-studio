@@ -34,8 +34,11 @@ def mesh_signature(mesh) -> str:
     return h.hexdigest()[:24]
 
 
-def geometry_key(mesh_sig: str, nx: int, ny: int, nz: int, inflow_gap: float, wake_gap: float, lateral_gap: float) -> str:
-    payload = f"{mesh_sig}|{nx}|{ny}|{nz}|{inflow_gap:.6g}|{wake_gap:.6g}|{lateral_gap:.6g}"
+def geometry_key(
+    mesh_sig: str, nx: int, ny: int, nz: int, inflow_gap: float, wake_gap: float, lateral_gap: float,
+    domain_mode: str = "external",
+) -> str:
+    payload = f"{mesh_sig}|{nx}|{ny}|{nz}|{inflow_gap:.6g}|{wake_gap:.6g}|{lateral_gap:.6g}|{domain_mode}"
     return hashlib.sha256(payload.encode()).hexdigest()[:24]
 
 
