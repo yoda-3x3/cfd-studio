@@ -1,0 +1,15 @@
+add_library(cfd_io STATIC
+    src/placeholder.cpp
+)
+
+target_include_directories(cfd_io PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+target_include_directories(cfd_io PRIVATE
+    ${CMAKE_SOURCE_DIR}/vendor/json
+)
+
+target_link_libraries(cfd_io PUBLIC cfd_core cfd_mesh)
+
+cfd_apply_warnings(cfd_io)
+cfd_apply_static_runtime(cfd_io)
