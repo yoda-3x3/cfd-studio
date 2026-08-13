@@ -186,7 +186,17 @@ void ThreeDPanel::buildUi() {
     threadsSpin_ = new QSpinBox(caseGroup);
     threadsSpin_->setRange(1, maxThreads);
     threadsSpin_->setValue(std::min(8, maxThreads));
-    caseForm->addRow("Threads:", threadsSpin_);
+    caseForm->addRow(QString("CPU threads (max %1):").arg(maxThreads), threadsSpin_);
+
+    auto* threadsNote = new QLabel(
+        "The pressure solve is parallelized across cores, but this kind of "
+        "stencil computation is memory-bandwidth-bound: expect a real but "
+        "modest speedup (often best around 4-8 threads) rather than linear "
+        "scaling to every core.",
+        caseGroup);
+    threadsNote->setObjectName("description");
+    threadsNote->setWordWrap(true);
+    caseForm->addRow(threadsNote);
 
     leftLayout->addWidget(caseGroup);
 
