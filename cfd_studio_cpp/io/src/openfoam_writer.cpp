@@ -57,6 +57,21 @@ OpenFoamCaseWriter::OpenFoamCaseWriter(
     const Mesh* surface_mesh, const std::string& domain_mode)
     : case_dir_(case_dir), domain_mode_(domain_mode), nx_(nx), ny_(ny), nz_(nz), dx_(dx), dy_(dy), dz_(dz),
       surface_mesh_(surface_mesh) {
+    // A writer is only ever constructed for a genuinely fresh run (run_3d's
+    // cache-hit path returns before reaching here), so anything already at
+    // case_dir_ is stale -- most importantly, numbered timestep directories
+    // from a *previous* run at a different grid resolution, whose field
+    // files carry a different cell count than the mesh this writer is
+    // about to build. Left in place, ParaView tries to reconcile
+    // mismatched-size field data across the old and new timesteps, which
+    // is a real bug (not just a "big mesh is slow" case) -- reusing an
+    // output directory across two differently-configured runs is an
+    // entirely normal thing for a user to do (e.g. re-running at a
+    // coarser grid for a faster preview). Wipe first, matching
+    // VtkSeriesWriter::clear()'s equivalent convention for the 2D case.
+    std::error_code ec;
+    fs::remove_all(case_dir_, ec);
+
     fs::create_directories(case_dir_);
     fs::create_directories(fs::path(case_dir_) / "constant" / "polyMesh");
     fs::create_directories(fs::path(case_dir_) / "system");

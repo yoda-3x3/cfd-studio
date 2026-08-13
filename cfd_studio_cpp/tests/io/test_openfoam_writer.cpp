@@ -130,3 +130,42 @@ TEST_CASE("OpenFoamCaseWriter::write_timestep writes internalField entries match
     REQUIRE(n_u == writer.n_cells());
     REQUIRE(writer.n_cells() == nx * ny * nz - 1);
 }
+
+TEST_CASE("OpenFoamCaseWriter: reusing a case_dir at a different grid resolution wipes stale timestep data",
+          "[io][openfoam_writer]") {
+    // Regression test: a real bug found via the GUI -- re-running a 3D
+    // simulation into the same output directory at a different grid
+    // resolution (e.g. switching to a coarser preview grid) left the
+    // *previous* run's numbered timestep directories in place, since only
+    // polyMesh itself was overwritten. ParaView then tried to reconcile
+    // field data sized for the old cell count against the new mesh,
+    // making the case extremely slow/inconsistent to open -- not just
+    // "large mesh is slow" but genuinely broken data. Every writer
+    // construction must fully wipe case_dir first.
+    std::string dir = temp_case_dir("stale_resolution_switch");
+
+    // First "run": a coarse grid, write a timestep.
+    int nx1 = 4, ny1 = 4, nz1 = 4;
+    std::vector<std::uint8_t> solid1(static_cast<std::size_t>(nx1) * ny1 * nz1, 0);
+    {
+        OpenFoamCaseWriter writer1(dir, nx1, ny1, nz1, 0.1, 0.1, 0.1, solid1);
+        std::vector<double> u(solid1.size(), 1.0), v(solid1.size(), 0.0), w(solid1.size(), 0.0), p(solid1.size(), 0.5);
+        writer1.write_timestep(0.0, u.data(), v.data(), w.data(), p.data());
+        writer1.write_timestep(1.0, u.data(), v.data(), w.data(), p.data());
+    }
+    REQUIRE(fs::exists(fs::path(dir) / "1"));
+    int stale_cell_count = nx1 * ny1 * nz1;
+
+    // Second "run": a finer grid, same output directory (exactly what the
+    // GUI does if the user re-runs without changing the output folder).
+    int nx2 = 8, ny2 = 6, nz2 = 6;
+    std::vector<std::uint8_t> solid2(static_cast<std::size_t>(nx2) * ny2 * nz2, 0);
+    OpenFoamCaseWriter writer2(dir, nx2, ny2, nz2, 0.05, 0.05, 0.05, solid2);
+
+    // The stale timestep "1" from the first run must be gone -- not just
+    // superseded, actually removed, since its field data has the wrong
+    // cell count for the new mesh.
+    REQUIRE_FALSE(fs::exists(fs::path(dir) / "1"));
+    REQUIRE(writer2.n_cells() == nx2 * ny2 * nz2);
+    REQUIRE(writer2.n_cells() != stale_cell_count);
+}
