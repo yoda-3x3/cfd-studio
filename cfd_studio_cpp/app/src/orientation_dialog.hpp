@@ -9,6 +9,7 @@
 
 #include "mesh/mesh.hpp"
 #include "solvers/orientation.hpp"
+#include "theme.hpp"
 #include "widgets/mesh_preview_widget.hpp"
 
 class QRadioButton;
@@ -28,7 +29,8 @@ class OrientationDialog : public QDialog {
     Q_OBJECT
 
 public:
-    OrientationDialog(const cfd::mesh::Mesh& mesh, const QString& meshName, QWidget* parent = nullptr);
+    OrientationDialog(const cfd::mesh::Mesh& mesh, const QString& meshName, const Theme& theme,
+                       QWidget* parent = nullptr);
 
     // Valid only after exec() returns QDialog::Accepted -- the reoriented
     // mesh, at full resolution.
@@ -49,6 +51,7 @@ private:
 
     cfd::mesh::Mesh mesh_;
     QString meshName_;
+    Theme theme_;
     std::array<cfd::solvers::OrientationCandidate, 3> candidates_;
     int selectedCandidateIndex_ = 0;
     bool pickMode_ = false;

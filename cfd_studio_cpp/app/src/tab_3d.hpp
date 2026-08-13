@@ -102,6 +102,8 @@ private:
     QThread* thread_ = nullptr;
     Sim3DWorker* worker_ = nullptr;
 
+    Theme currentTheme_ = theme_by_key(kDefaultThemeKey);
+
     QString meshPath_;
     std::optional<cfd::mesh::Mesh> rawMesh_;
     std::optional<cfd::mesh::Mesh> orientedMesh_;

@@ -15,6 +15,7 @@
 
 #include "mesh/mesh.hpp"
 #include "mesh/mesh_bvh.hpp"
+#include "theme.hpp"
 
 // Hardware-rasterized 3D mesh preview + ray-cast picking -- replaces the
 // Python app's mplot3d-based orientation-dialog view, which needed mesh
@@ -30,6 +31,8 @@ class MeshPreviewWidget : public QOpenGLWidget, protected QOpenGLFunctions {
 public:
     explicit MeshPreviewWidget(QWidget* parent = nullptr);
     ~MeshPreviewWidget() override;
+
+    void setTheme(const Theme& theme);
 
     // Uploads `mesh` to the GPU and (re)builds its MeshBVH for picking.
     // Resets the camera to frame the mesh's bounding box.
@@ -65,6 +68,8 @@ private:
     [[nodiscard]] QMatrix4x4 projectionMatrix() const;
     void pickAt(const QPoint& pos);
     void drawOverlays(const QMatrix4x4& mvp);
+
+    Theme theme_ = theme_by_key(kDefaultThemeKey);
 
     cfd::mesh::Mesh mesh_;
     std::unique_ptr<cfd::mesh::MeshBVH> bvh_;

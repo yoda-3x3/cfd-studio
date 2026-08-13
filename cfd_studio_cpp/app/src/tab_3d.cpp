@@ -35,6 +35,7 @@ ThreeDPanel::ThreeDPanel(QWidget* parent) : QWidget(parent), settings_("CFDStudi
 }
 
 void ThreeDPanel::setTheme(const Theme& theme) {
+    currentTheme_ = theme;
     xyVelocityPlot_->setTheme(theme);
     xyPressurePlot_->setTheme(theme);
     xzVelocityPlot_->setTheme(theme);
@@ -339,7 +340,7 @@ void ThreeDPanel::onReopenOrientationDialog() {
 }
 
 void ThreeDPanel::runOrientationDialog(const cfd::mesh::Mesh& mesh, const QString& path) {
-    OrientationDialog dlg(mesh, QFileInfo(path).fileName(), this);
+    OrientationDialog dlg(mesh, QFileInfo(path).fileName(), currentTheme_, this);
     if (dlg.exec() == QDialog::Accepted && dlg.confirmedMesh()) {
         orientedMesh_ = dlg.confirmedMesh();
     } else {

@@ -9,8 +9,9 @@
 #include <QRadioButton>
 #include <QVBoxLayout>
 
-OrientationDialog::OrientationDialog(const cfd::mesh::Mesh& mesh, const QString& meshName, QWidget* parent)
-    : QDialog(parent), mesh_(mesh), meshName_(meshName) {
+OrientationDialog::OrientationDialog(const cfd::mesh::Mesh& mesh, const QString& meshName, const Theme& theme,
+                                      QWidget* parent)
+    : QDialog(parent), mesh_(mesh), meshName_(meshName), theme_(theme) {
     candidates_ = cfd::solvers::analyze_orientation(mesh_);
     buildUi();
 }
@@ -23,6 +24,7 @@ void OrientationDialog::buildUi() {
 
     preview_ = new MeshPreviewWidget(this);
     preview_->setMesh(mesh_);
+    preview_->setTheme(theme_);
     root->addWidget(preview_, 1);
     connect(preview_, &MeshPreviewWidget::pointPicked, this, &OrientationDialog::onPointPicked);
 
@@ -72,7 +74,7 @@ void OrientationDialog::buildUi() {
     });
 
     warningLabel_ = new QLabel(autoPanel_);
-    warningLabel_->setStyleSheet("color: #f59e0b;");
+    warningLabel_->setStyleSheet(QString("color: %1;").arg(theme_.danger));
     warningLabel_->setWordWrap(true);
     autoLayout->addWidget(warningLabel_);
     if (candidates_[0].projected_area > 0.0 &&

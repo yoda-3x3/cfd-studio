@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include <QColor>
 #include <QMouseEvent>
 #include <QVector4D>
 #include <QWheelEvent>
@@ -67,10 +68,14 @@ MeshPreviewWidget::~MeshPreviewWidget() {
     doneCurrent();
 }
 
+void MeshPreviewWidget::setTheme(const Theme& theme) {
+    theme_ = theme;
+    update();
+}
+
 void MeshPreviewWidget::initializeGL() {
     initializeOpenGLFunctions();
     glEnable(GL_DEPTH_TEST);
-    glClearColor(0.08f, 0.09f, 0.11f, 1.0f);
 
     meshProgram_ = std::make_unique<QOpenGLShaderProgram>();
     meshProgram_->addShaderFromSourceCode(QOpenGLShader::Vertex, kMeshVertexShader);
@@ -175,16 +180,22 @@ QMatrix4x4 MeshPreviewWidget::projectionMatrix() const {
 }
 
 void MeshPreviewWidget::paintGL() {
+    QColor clearColor(theme_.plot_bg);
+    glClearColor(static_cast<float>(clearColor.redF()), static_cast<float>(clearColor.greenF()),
+                 static_cast<float>(clearColor.blueF()), 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     if (!haveMesh_) return;
     if (meshDirty_) rebuildGeometry();
 
     QMatrix4x4 mvp = projectionMatrix() * viewMatrix();
 
+    QColor meshColor(theme_.accent);
     meshProgram_->bind();
     meshProgram_->setUniformValue("uMvp", mvp);
     meshProgram_->setUniformValue("uLightDir", QVector3D(-0.4f, -1.0f, -0.3f));
-    meshProgram_->setUniformValue("uColor", QVector3D(0.35f, 0.55f, 0.85f));
+    meshProgram_->setUniformValue("uColor", QVector3D(static_cast<float>(meshColor.redF()),
+                                                        static_cast<float>(meshColor.greenF()),
+                                                        static_cast<float>(meshColor.blueF())));
     vao_.bind();
     glDrawArrays(GL_TRIANGLES, 0, vertexCount_);
     vao_.release();
@@ -222,6 +233,9 @@ void MeshPreviewWidget::drawOverlays(const QMatrix4x4& mvp) {
                                               static_cast<float>(highlightPoint_->z)});
     }
 
+    QColor axisColor(theme_.plot_fg);
+    QColor highlightColor(theme_.danger);
+
     flatProgram_->bind();
     flatProgram_->setUniformValue("uMvp", mvp);
     overlayVao_.bind();
@@ -232,14 +246,18 @@ void MeshPreviewWidget::drawOverlays(const QMatrix4x4& mvp) {
         overlayVbo_.allocate(lineVerts.data(), static_cast<int>(lineVerts.size() * sizeof(float)));
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), reinterpret_cast<void*>(0));
-        flatProgram_->setUniformValue("uColor", QVector3D(1.0f, 1.0f, 1.0f));
+        flatProgram_->setUniformValue("uColor", QVector3D(static_cast<float>(axisColor.redF()),
+                                                            static_cast<float>(axisColor.greenF()),
+                                                            static_cast<float>(axisColor.blueF())));
         glDrawArrays(GL_LINES, 0, static_cast<int>(lineVerts.size() / 3));
     }
     if (!pointVerts.empty()) {
         overlayVbo_.allocate(pointVerts.data(), static_cast<int>(pointVerts.size() * sizeof(float)));
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), reinterpret_cast<void*>(0));
-        flatProgram_->setUniformValue("uColor", QVector3D(1.0f, 0.85f, 0.2f));
+        flatProgram_->setUniformValue("uColor", QVector3D(static_cast<float>(highlightColor.redF()),
+                                                            static_cast<float>(highlightColor.greenF()),
+                                                            static_cast<float>(highlightColor.blueF())));
         glDrawArrays(GL_POINTS, 0, static_cast<int>(pointVerts.size() / 3));
     }
 

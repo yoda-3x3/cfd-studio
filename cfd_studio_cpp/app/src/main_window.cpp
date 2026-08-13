@@ -21,9 +21,6 @@ MainWindow::MainWindow(QWidget* parent)
     resize(1280, 820);
     setWindowIcon(QIcon(":/app_icon.ico"));
 
-    applyTheme(settings_.value("theme", kDefaultThemeKey).toString());
-    buildMenus();
-
     auto* tabs = new QTabWidget(this);
 
     twoDPanel_ = new TwoDPanel(tabs);
@@ -33,6 +30,14 @@ MainWindow::MainWindow(QWidget* parent)
     tabs->addTab(threeDPanel_, "3D Custom Geometry");
 
     setCentralWidget(tabs);
+
+    // Must run after the panels above exist -- applyTheme() forwards the
+    // theme to twoDPanel_/threeDPanel_, which was previously a no-op here
+    // since they were constructed afterward and stayed on their
+    // default-constructed (dark_blue) plot colors regardless of the
+    // persisted theme.
+    applyTheme(settings_.value("theme", kDefaultThemeKey).toString());
+    buildMenus();
 
     statusBar()->showMessage("Ready.");
 }
