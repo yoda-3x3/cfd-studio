@@ -8,12 +8,8 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
-#include <QPushButton>
 #include <QStatusBar>
 #include <QTabWidget>
-#include <QVBoxLayout>
-
-#include "mesh/primitives.hpp"
 
 namespace {
 constexpr const char* kAppTitle = "CFD Studio — 2D/3D Incompressible Flow with ParaView";
@@ -30,28 +26,11 @@ MainWindow::MainWindow(QWidget* parent)
 
     auto* tabs = new QTabWidget(this);
 
-    // TEMPORARY 6.6/6.7 smoke test -- added first/default so it's visible
-    // immediately on launch for screenshot verification.
-    auto* testTab = new QWidget(tabs);
-    auto* testLayout = new QVBoxLayout(testTab);
-    auto* openDialogButton = new QPushButton("Open Orientation Dialog (temp test)", testTab);
-    testLayout->addWidget(openDialogButton);
-    testLayout->addStretch();
-    connect(openDialogButton, &QPushButton::clicked, this, [this]() {
-        cfd::mesh::Mesh box = cfd::mesh::make_box({1.0, 0.6, 0.4});
-        OrientationDialog dlg(box, "test_box.stl", this);
-        if (dlg.exec() == QDialog::Accepted && dlg.confirmedMesh()) {
-            statusBar()->showMessage("Orientation confirmed.", 5000);
-        } else {
-            statusBar()->showMessage("Orientation dialog cancelled.", 5000);
-        }
-    });
-    tabs->addTab(testTab, "3D Preview Test (temp)");
-
     twoDPanel_ = new TwoDPanel(tabs);
     tabs->addTab(twoDPanel_, "2D Flow Scenarios");
-    // 3D Custom Geometry tab lands in Phase 6.8, once the orientation
-    // dialog (6.7) that owns the mesh preview widget exists.
+
+    threeDPanel_ = new ThreeDPanel(tabs);
+    tabs->addTab(threeDPanel_, "3D Custom Geometry");
 
     setCentralWidget(tabs);
 
@@ -90,6 +69,7 @@ void MainWindow::applyTheme(const QString& key) {
     currentThemeKey_ = theme.key;
     settings_.setValue("theme", theme.key);
     if (twoDPanel_) twoDPanel_->setTheme(theme);
+    if (threeDPanel_) threeDPanel_->setTheme(theme);
 }
 
 void MainWindow::showAbout() {
@@ -100,5 +80,6 @@ void MainWindow::showAbout() {
 
 void MainWindow::closeEvent(QCloseEvent* event) {
     if (twoDPanel_) twoDPanel_->shutdown();
+    if (threeDPanel_) threeDPanel_->shutdown();
     event->accept();
 }

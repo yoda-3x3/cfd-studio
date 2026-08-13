@@ -9,6 +9,7 @@ add_library(cfd_solvers STATIC
     src/orientation.cpp
     src/scenario_presets_2d.cpp
     src/performance_presets_3d.cpp
+    src/materials.cpp
 )
 
 target_include_directories(cfd_solvers PUBLIC

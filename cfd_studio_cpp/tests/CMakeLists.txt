@@ -10,6 +10,7 @@ add_executable(cfd_tests
     solvers/test_voxelizer.cpp
     solvers/test_orientation.cpp
     solvers/test_scenario_presets.cpp
+    solvers/test_materials.cpp
     mesh/test_readers.cpp
     mesh/test_mesh_bvh.cpp
     mesh/test_convex_hull2d.cpp
