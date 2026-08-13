@@ -5,6 +5,7 @@
 
 #include "tab_2d.hpp"
 #include "theme.hpp"
+#include "widgets/mesh_preview_widget.hpp"
 
 class MainWindow : public QMainWindow {
     Q_OBJECT

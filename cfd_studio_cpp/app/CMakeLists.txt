@@ -1,4 +1,4 @@
-find_package(Qt6 REQUIRED COMPONENTS Widgets OpenGLWidgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets OpenGLWidgets OpenGL)
 
 qt_standard_project_setup()
 set(CMAKE_AUTORCC ON)
@@ -11,6 +11,7 @@ qt_add_executable(cfd_studio
     src/sim2d_worker.cpp
     src/paraview_launcher.cpp
     src/widgets/plot_widget.cpp
+    src/widgets/mesh_preview_widget.cpp
     resources/app_icon.qrc
 )
 
@@ -21,6 +22,7 @@ target_include_directories(cfd_studio PRIVATE
 target_link_libraries(cfd_studio PRIVATE
     Qt6::Widgets
     Qt6::OpenGLWidgets
+    Qt6::OpenGL
     cfd_pipeline
 )
 

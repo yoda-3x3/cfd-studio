@@ -11,6 +11,8 @@
 #include <QStatusBar>
 #include <QTabWidget>
 
+#include "mesh/primitives.hpp"
+
 namespace {
 constexpr const char* kAppTitle = "CFD Studio — 2D/3D Incompressible Flow with ParaView";
 }
@@ -25,10 +27,20 @@ MainWindow::MainWindow(QWidget* parent)
     buildMenus();
 
     auto* tabs = new QTabWidget(this);
+
+    // TEMPORARY 6.6 smoke test -- added first/default so it's visible
+    // immediately on launch for screenshot verification.
+    auto* meshPreview = new MeshPreviewWidget(tabs);
+    cfd::mesh::Mesh box = cfd::mesh::make_box({1.0, 0.6, 0.4});
+    meshPreview->setMesh(box);
+    meshPreview->setFlowAxis(cfd::mesh::Vec3{1.0, 0.0, 0.0});
+    tabs->addTab(meshPreview, "3D Preview Test (temp)");
+
     twoDPanel_ = new TwoDPanel(tabs);
     tabs->addTab(twoDPanel_, "2D Flow Scenarios");
-    // 3D Custom Geometry tab lands in Phase 6.8, once the mesh preview
-    // widget (6.6) and orientation dialog (6.7) it depends on exist.
+    // 3D Custom Geometry tab lands in Phase 6.8, once the orientation
+    // dialog (6.7) that owns the mesh preview widget exists.
+
     setCentralWidget(tabs);
 
     statusBar()->showMessage("Ready.");
