@@ -14,6 +14,7 @@ struct Run2DOptions {
     std::string scenario; // "cavity" | "channel" | "obstacle"
     std::optional<int> nx, ny; // unset -> preset default
     std::optional<double> Re, U, dt;
+    std::optional<double> obstacle_x0, obstacle_width, obstacle_height; // unset -> preset default (only used if the preset has_obstacle)
     int n_steps = 2000;
     int output_every = 20;
     std::string output_dir;

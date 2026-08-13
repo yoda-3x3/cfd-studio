@@ -1,48 +1,63 @@
 #include "main_window.hpp"
 
-#include <cmath>
+#include <QActionGroup>
+#include <QApplication>
+#include <QCloseEvent>
+#include <QFileDialog>
+#include <QIcon>
+#include <QMenu>
+#include <QMenuBar>
+#include <QMessageBox>
+#include <QStatusBar>
+#include <QTabWidget>
 
-#include <QHBoxLayout>
-#include <QWidget>
+namespace {
+constexpr const char* kAppTitle = "CFD Studio — 2D/3D Incompressible Flow with ParaView";
+}
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent), settings_("CFDStudio", "CFDStudio") {
-    setWindowTitle("CFD Studio");
+    setWindowTitle(kAppTitle);
     resize(1280, 820);
+    setWindowIcon(QIcon(":/app_icon.ico"));
 
     applyTheme(settings_.value("theme", kDefaultThemeKey).toString());
+    buildMenus();
 
-    // TEMPORARY 6.4 smoke test: real main window content (2D tab etc.)
-    // lands in Phase 6.5 -- this just proves PlotWidget actually paints
-    // correctly before building the rest of the app on top of it.
-    auto* central = new QWidget(this);
-    auto* layout = new QHBoxLayout(central);
-    auto* heatmap = new PlotWidget(PlotWidget::Mode::Heatmap, central);
-    auto* logLine = new PlotWidget(PlotWidget::Mode::LogLine, central);
-    layout->addWidget(heatmap);
-    layout->addWidget(logLine);
-    setCentralWidget(central);
+    auto* tabs = new QTabWidget(this);
+    twoDPanel_ = new TwoDPanel(tabs);
+    tabs->addTab(twoDPanel_, "2D Flow Scenarios");
+    // 3D Custom Geometry tab lands in Phase 6.8, once the mesh preview
+    // widget (6.6) and orientation dialog (6.7) it depends on exist.
+    setCentralWidget(tabs);
 
-    int nx = 60, ny = 40;
-    std::vector<double> values(static_cast<std::size_t>(nx) * static_cast<std::size_t>(ny));
-    std::vector<float> obstacle(static_cast<std::size_t>(nx) * static_cast<std::size_t>(ny), 0.0f);
-    for (int j = 0; j < ny; ++j) {
-        for (int i = 0; i < nx; ++i) {
-            double x = static_cast<double>(i) / nx, y = static_cast<double>(j) / ny;
-            std::size_t k = static_cast<std::size_t>(j) * static_cast<std::size_t>(nx) + static_cast<std::size_t>(i);
-            values[k] = std::sin(x * 6.28) * std::cos(y * 6.28) + 0.3 * x;
-            // A circular "obstacle" in the middle, to check the overlay.
-            if ((x - 0.5) * (x - 0.5) + (y - 0.5) * (y - 0.5) < 0.02) {
-                obstacle[k] = 1.0f;
-            }
-        }
+    statusBar()->showMessage("Ready.");
+}
+
+void MainWindow::buildMenus() {
+    auto* settingsMenu = menuBar()->addMenu("&Settings");
+    auto* locateParaviewAction = settingsMenu->addAction("Locate ParaView...");
+    connect(locateParaviewAction, &QAction::triggered, this, [this]() {
+        QString path = QFileDialog::getOpenFileName(this, "Locate ParaView Executable", QString(),
+                                                      "paraview.exe;;All Files (*.*)");
+        if (!path.isEmpty()) settings_.setValue("paraviewPath", path);
+    });
+
+    auto* themeMenu = menuBar()->addMenu("&Theme");
+    auto* themeGroup = new QActionGroup(this);
+    themeGroup->setExclusive(true);
+    for (const auto& theme : themes()) {
+        auto* action = themeMenu->addAction(theme.label);
+        action->setCheckable(true);
+        action->setChecked(theme.key == currentThemeKey_);
+        themeGroup->addAction(action);
+        QString key = theme.key;
+        connect(action, &QAction::triggered, this, [this, key]() { applyTheme(key); });
     }
-    heatmap->setHeatmapData(values, nx, ny, "velocity_magnitude");
-    heatmap->setObstacleMask(obstacle);
 
-    for (int step = 1; step <= 200; ++step) {
-        logLine->appendResidualPoint(step, 1.0 * std::exp(-step / 40.0) + 1e-6);
-    }
+    auto* helpMenu = menuBar()->addMenu("&Help");
+    auto* aboutAction = helpMenu->addAction("About");
+    connect(aboutAction, &QAction::triggered, this, &MainWindow::showAbout);
 }
 
 void MainWindow::applyTheme(const QString& key) {
@@ -50,4 +65,16 @@ void MainWindow::applyTheme(const QString& key) {
     setStyleSheet(build_stylesheet(theme));
     currentThemeKey_ = theme.key;
     settings_.setValue("theme", theme.key);
+    if (twoDPanel_) twoDPanel_->setTheme(theme);
+}
+
+void MainWindow::showAbout() {
+    QMessageBox::information(this, "About CFD Studio",
+                              "CFD Studio (C++/Qt6 rewrite)\n\n"
+                              "2D/3D incompressible Navier-Stokes solver with OpenFOAM/ParaView export.");
+}
+
+void MainWindow::closeEvent(QCloseEvent* event) {
+    if (twoDPanel_) twoDPanel_->shutdown();
+    event->accept();
 }

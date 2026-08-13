@@ -28,7 +28,14 @@ Run2DResult run_2d(const Run2DOptions& opts, const std::function<void(int, doubl
     config.kind = preset.kind;
     config.U = opts.U.value_or(preset.default_U);
     config.dt = opts.dt;
-    if (preset.has_obstacle) config.obstacle = cfd::solvers::default_obstacle_2d(preset);
+    if (preset.has_obstacle) {
+        auto def = cfd::solvers::default_obstacle_2d(preset);
+        cfd::solvers::Obstacle2D obstacle;
+        obstacle.x0 = opts.obstacle_x0.value_or(def.x0);
+        obstacle.width = opts.obstacle_width.value_or(def.width);
+        obstacle.height = opts.obstacle_height.value_or(def.height);
+        config.obstacle = obstacle;
+    }
 
     cfd::solvers::NavierStokes2D solver(config);
 

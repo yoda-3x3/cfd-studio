@@ -3,8 +3,8 @@
 #include <QMainWindow>
 #include <QSettings>
 
+#include "tab_2d.hpp"
 #include "theme.hpp"
-#include "widgets/plot_widget.hpp"
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -12,13 +12,18 @@ class MainWindow : public QMainWindow {
 public:
     explicit MainWindow(QWidget* parent = nullptr);
 
+protected:
+    void closeEvent(QCloseEvent* event) override;
+
 private:
+    void buildMenus();
     // Applies the stylesheet and persists the choice under the same
     // QSettings org/app/key ("CFDStudio"/"CFDStudio"/"theme") as
-    // ui/main_window.py's _apply_theme -- reused by the Theme menu once
-    // it's built (Phase 6.5).
+    // ui/main_window.py's _apply_theme.
     void applyTheme(const QString& key);
+    void showAbout();
 
     QSettings settings_;
     QString currentThemeKey_;
+    TwoDPanel* twoDPanel_ = nullptr;
 };
