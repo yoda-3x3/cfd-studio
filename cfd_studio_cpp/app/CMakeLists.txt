@@ -37,3 +37,4 @@ cfd_apply_warnings(cfd_studio)
 # (via windeployqt, Phase 7) instead of statically linking like every
 # other target in this project.
 cfd_copy_embree_dlls(cfd_studio)
+cfd_deploy_qt(cfd_studio)
