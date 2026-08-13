@@ -18,6 +18,8 @@
 #include <QSpinBox>
 #include <QVBoxLayout>
 
+#include <string>
+
 #include "paraview_launcher.hpp"
 #include "solvers/scenario_presets_2d.hpp"
 #include "widgets/plot_widget.hpp"
@@ -193,7 +195,8 @@ void TwoDPanel::buildUi() {
 
 void TwoDPanel::onScenarioChanged() {
     QString key = scenarioCombo_->currentData().toString();
-    const auto& preset = cfd::solvers::scenario_preset_2d(key.toStdString());
+    std::string keyStd = key.toStdString();
+    const auto& preset = cfd::solvers::scenario_preset_2d(keyStd);
     descriptionLabel_->setText(scenarioUiInfo().value(key).description);
     nxSpin_->setValue(preset.default_nx);
     nySpin_->setValue(preset.default_ny);
@@ -245,7 +248,8 @@ void TwoDPanel::onRunClicked() {
     }
 
     QString key = scenarioCombo_->currentData().toString();
-    const auto& preset = cfd::solvers::scenario_preset_2d(key.toStdString());
+    std::string keyStd = key.toStdString();
+    const auto& preset = cfd::solvers::scenario_preset_2d(keyStd);
 
     cfd::pipeline::Run2DOptions opts;
     opts.scenario = key.toStdString();
