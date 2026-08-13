@@ -7,6 +7,8 @@ add_library(cfd_solvers STATIC
     src/navier_stokes_2d.cpp
     src/voxelizer.cpp
     src/orientation.cpp
+    src/scenario_presets_2d.cpp
+    src/performance_presets_3d.cpp
 )
 
 target_include_directories(cfd_solvers PUBLIC

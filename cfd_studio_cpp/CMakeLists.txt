@@ -21,6 +21,7 @@ add_subdirectory(core)
 add_subdirectory(mesh)
 add_subdirectory(solvers)
 add_subdirectory(io)
+add_subdirectory(pipeline)
 add_subdirectory(cli)
 
 if(CFD_BUILD_GUI)
