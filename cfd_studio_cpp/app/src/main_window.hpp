@@ -4,6 +4,7 @@
 #include <QSettings>
 
 #include "theme.hpp"
+#include "widgets/plot_widget.hpp"
 
 class MainWindow : public QMainWindow {
     Q_OBJECT

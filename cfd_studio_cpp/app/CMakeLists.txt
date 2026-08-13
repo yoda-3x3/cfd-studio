@@ -6,6 +6,7 @@ qt_add_executable(cfd_studio
     src/main.cpp
     src/main_window.cpp
     src/theme.cpp
+    src/widgets/plot_widget.cpp
 )
 
 target_include_directories(cfd_studio PRIVATE
