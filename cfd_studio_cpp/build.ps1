@@ -16,10 +16,16 @@
 
 .PARAMETER SkipTests
     Configure and build only; don't run cfd_tests.exe afterward.
+
+.PARAMETER BuildGui
+    Also configure and build the Qt6 cfd_studio GUI target (CFD_BUILD_GUI=ON),
+    adding Qt's CMake package path via CMAKE_PREFIX_PATH. Off by default so
+    plain CLI/library work doesn't pay Qt's extra configure/build cost.
 #>
 param(
     [switch]$Clean,
-    [switch]$SkipTests
+    [switch]$SkipTests,
+    [switch]$BuildGui
 )
 
 $ErrorActionPreference = "Stop"
@@ -27,7 +33,8 @@ $root = $PSScriptRoot
 
 # --- Prerequisites this script expects to already be installed --------
 $qtMingw = "C:\Users\reach\Dance\Qt\Tools\mingw1310_64\bin"
-$qtBin   = "C:\Users\reach\Dance\Qt\6.9.3\mingw_64\bin"
+$qtRoot  = "C:\Users\reach\Dance\Qt\6.9.3\mingw_64"
+$qtBin   = "$qtRoot\bin"
 $cmakeBin = "C:\Program Files\CMake\bin"
 $vcpkgExe = "C:\Users\reach\Dance\vcpkg\vcpkg.exe"
 $vcpkgToolchain = "C:\Users\reach\Dance\vcpkg\scripts\buildsystems\vcpkg.cmake"
@@ -50,12 +57,16 @@ if ($Clean) {
 }
 
 Write-Host "Configuring ..."
+$guiFlags = @("-DCFD_BUILD_GUI=OFF")
+if ($BuildGui) {
+    $guiFlags = @("-DCFD_BUILD_GUI=ON", "-DCMAKE_PREFIX_PATH=$qtRoot")
+}
 & cmake -S $root -B "$root\build" -G "MinGW Makefiles" `
     -DCMAKE_BUILD_TYPE=Release `
     -DCMAKE_TOOLCHAIN_FILE="$vcpkgToolchain" `
     -DVCPKG_TARGET_TRIPLET=x64-mingw-dynamic -DVCPKG_HOST_TRIPLET=x64-mingw-dynamic `
     -DEMBREE_PREBUILT_ROOT="$embreeRoot" `
-    -DCFD_BUILD_TESTS=ON -DCFD_BUILD_GUI=OFF
+    -DCFD_BUILD_TESTS=ON @guiFlags
 if ($LASTEXITCODE -ne 0) { throw "CMake configure failed (exit $LASTEXITCODE)" }
 
 Write-Host "Building ..."
@@ -71,3 +82,6 @@ if (-not $SkipTests) {
 Write-Host "`nDone. Executables:"
 Write-Host "  $root\build\cli\cfd_headless.exe"
 Write-Host "  $root\build\tests\cfd_tests.exe"
+if ($BuildGui) {
+    Write-Host "  $root\build\app\cfd_studio.exe"
+}
