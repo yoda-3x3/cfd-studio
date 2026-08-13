@@ -20,6 +20,7 @@ add_executable(cfd_tests
     io/test_run_cache.cpp
     pipeline/test_run_2d.cpp
     pipeline/test_run_3d.cpp
+    pipeline/test_preview.cpp
 )
 
 target_include_directories(cfd_tests PRIVATE

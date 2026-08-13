@@ -1,5 +1,6 @@
 #include "pipeline/run_2d.hpp"
 
+#include <chrono>
 #include <stdexcept>
 
 #include "io/vtk_writer.hpp"
@@ -8,7 +9,12 @@
 
 namespace cfd::pipeline {
 
-Run2DResult run_2d(const Run2DOptions& opts, const std::function<void(int, double)>& on_progress) {
+namespace {
+constexpr double kPreviewThrottleSeconds = 0.15;
+}
+
+Run2DResult run_2d(const Run2DOptions& opts, const std::function<void(int, double)>& on_progress,
+                    const Preview2DCallback& on_preview) {
     if (opts.output_every <= 0) throw std::invalid_argument("run_2d: output_every must be positive");
 
     const auto& preset = cfd::solvers::scenario_preset_2d(opts.scenario);
@@ -38,16 +44,35 @@ Run2DResult run_2d(const Run2DOptions& opts, const std::function<void(int, doubl
     };
 
     write_step(0);
-    double last_residual = 0.0;
+
+    Run2DResult result;
+    result.pvd_path = writer.pvd_path();
+
+    auto last_update = std::chrono::steady_clock::now();
     for (int step = 1; step <= opts.n_steps; ++step) {
-        last_residual = solver.step();
-        if (on_progress) on_progress(step, last_residual);
+        if (opts.stop_flag && opts.stop_flag->load()) {
+            result.stopped = true;
+            break;
+        }
+
+        result.final_residual = solver.step();
+        result.steps_run = step;
+
+        auto now = std::chrono::steady_clock::now();
+        bool throttled_tick =
+            std::chrono::duration<double>(now - last_update).count() >= kPreviewThrottleSeconds || step == opts.n_steps;
+        if (throttled_tick) {
+            last_update = now;
+            if (on_progress) on_progress(step, result.final_residual);
+            if (on_preview) on_preview(solver.fields(), config.nx, config.ny, solver.dx(), solver.dy());
+        }
+
         if (step % opts.output_every == 0 || step == opts.n_steps) {
             write_step(step);
         }
     }
 
-    return Run2DResult{writer.pvd_path(), opts.n_steps, last_residual};
+    return result;
 }
 
 } // namespace cfd::pipeline
