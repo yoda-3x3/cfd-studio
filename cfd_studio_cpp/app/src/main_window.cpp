@@ -8,8 +8,10 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QStatusBar>
 #include <QTabWidget>
+#include <QVBoxLayout>
 
 #include "mesh/primitives.hpp"
 
@@ -28,13 +30,23 @@ MainWindow::MainWindow(QWidget* parent)
 
     auto* tabs = new QTabWidget(this);
 
-    // TEMPORARY 6.6 smoke test -- added first/default so it's visible
+    // TEMPORARY 6.6/6.7 smoke test -- added first/default so it's visible
     // immediately on launch for screenshot verification.
-    auto* meshPreview = new MeshPreviewWidget(tabs);
-    cfd::mesh::Mesh box = cfd::mesh::make_box({1.0, 0.6, 0.4});
-    meshPreview->setMesh(box);
-    meshPreview->setFlowAxis(cfd::mesh::Vec3{1.0, 0.0, 0.0});
-    tabs->addTab(meshPreview, "3D Preview Test (temp)");
+    auto* testTab = new QWidget(tabs);
+    auto* testLayout = new QVBoxLayout(testTab);
+    auto* openDialogButton = new QPushButton("Open Orientation Dialog (temp test)", testTab);
+    testLayout->addWidget(openDialogButton);
+    testLayout->addStretch();
+    connect(openDialogButton, &QPushButton::clicked, this, [this]() {
+        cfd::mesh::Mesh box = cfd::mesh::make_box({1.0, 0.6, 0.4});
+        OrientationDialog dlg(box, "test_box.stl", this);
+        if (dlg.exec() == QDialog::Accepted && dlg.confirmedMesh()) {
+            statusBar()->showMessage("Orientation confirmed.", 5000);
+        } else {
+            statusBar()->showMessage("Orientation dialog cancelled.", 5000);
+        }
+    });
+    tabs->addTab(testTab, "3D Preview Test (temp)");
 
     twoDPanel_ = new TwoDPanel(tabs);
     tabs->addTab(twoDPanel_, "2D Flow Scenarios");

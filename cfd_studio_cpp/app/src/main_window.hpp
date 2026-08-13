@@ -3,6 +3,7 @@
 #include <QMainWindow>
 #include <QSettings>
 
+#include "orientation_dialog.hpp"
 #include "tab_2d.hpp"
 #include "theme.hpp"
 #include "widgets/mesh_preview_widget.hpp"
