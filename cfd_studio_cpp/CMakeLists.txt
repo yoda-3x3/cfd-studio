@@ -2,6 +2,13 @@ cmake_minimum_required(VERSION 3.24)
 
 project(CfdStudio LANGUAGES CXX)
 
+if(WIN32)
+    # Needed so app/resources/app_icon.rc (the exe's own PE icon resource,
+    # for Explorer/taskbar/shortcuts -- separate from Qt's app_icon.qrc,
+    # which only sets the in-app QWindow icon) compiles via windres.
+    enable_language(RC)
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)

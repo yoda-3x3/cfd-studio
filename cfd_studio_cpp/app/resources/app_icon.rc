@@ -1,0 +1,6 @@
+// Embeds app_icon.ico as the executable's own Win32 resource, so Explorer,
+// pinned taskbar shortcuts, and Alt-Tab all show the real icon instead of a
+// generic exe icon. This is separate from app_icon.qrc, which only sets the
+// in-app QWindow icon (titlebar/taskbar button while actually running) --
+// Explorer reads the PE resource table directly, not Qt's embedded resources.
+IDI_ICON1 ICON "app_icon.ico"

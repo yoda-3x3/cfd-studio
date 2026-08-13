@@ -17,6 +17,7 @@ qt_add_executable(cfd_studio
     src/widgets/plot_widget.cpp
     src/widgets/mesh_preview_widget.cpp
     resources/app_icon.qrc
+    resources/app_icon.rc
 )
 
 target_include_directories(cfd_studio PRIVATE
