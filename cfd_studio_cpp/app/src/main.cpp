@@ -1,9 +1,11 @@
 #include <QApplication>
 #include <QIcon>
 #include <QSurfaceFormat>
+#include <QTimer>
 
 #include "main_window.hpp"
 #include "preview_types.hpp"
+#include "splash_screen.hpp"
 
 int main(int argc, char** argv) {
     qRegisterMetaType<Preview2DSnapshot>("Preview2DSnapshot");
@@ -19,8 +21,19 @@ int main(int argc, char** argv) {
     app.setApplicationName("CFD Studio");
     app.setWindowIcon(QIcon(":/app_icon.ico"));
 
+    // Unlike ui/splash.py, there's no multi-second import cost to cover
+    // here (no numpy/scipy/matplotlib/numba/trimesh chain) -- just show
+    // the splash for a short fixed branding moment, then swap to the
+    // real window.
+    CowSplashScreen splash;
+    splash.show();
+
     MainWindow window;
-    window.show();
+
+    QTimer::singleShot(1500, [&]() {
+        splash.close();
+        window.show();
+    });
 
     return app.exec();
 }

@@ -13,6 +13,7 @@ qt_add_executable(cfd_studio
     src/sim3d_worker.cpp
     src/paraview_launcher.cpp
     src/orientation_dialog.cpp
+    src/splash_screen.cpp
     src/widgets/plot_widget.cpp
     src/widgets/mesh_preview_widget.cpp
     resources/app_icon.qrc
