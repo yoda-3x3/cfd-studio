@@ -9,3 +9,7 @@ vcpkg_installed/
 
 # CLion / other IDE CMake caches, if ever opened that way
 cmake-build-*/
+
+# Built installer (ISCC output) -- regenerated from installer/cfd_studio.iss
+# + a normal build.ps1 -BuildGui build, not source.
+installer/output/

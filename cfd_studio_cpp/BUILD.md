@@ -67,6 +67,24 @@ nothing on `PATH` but bare Windows system directories — no need to have
 Qt/MinGW/vcpkg on `PATH` to *run* the built executables, only to *build*
 them (which `build.ps1` handles for you).
 
+## Building an installer
+
+Requires [Inno Setup](https://jrsoftware.org/isinfo.php) (`winget install -e --id JRSoftware.InnoSetup`).
+After a normal `.\build.ps1 -BuildGui` build:
+
+```powershell
+& "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer\cfd_studio.iss
+```
+
+Produces `installer\output\CFDStudioSetup.exe` — packages whatever
+`windeployqt` deployed to `build\app\` (see `cmake\DeployQt.cmake`), so it
+picks up dependency changes automatically rather than duplicating the DLL
+list. Installs per-user to `%LOCALAPPDATA%\CFD Studio` (`PrivilegesRequired
+= lowest` — no admin/UAC prompt), with Start Menu + optional desktop
+shortcuts pointing straight at `cfd_studio.exe` (not `launch_cfd_studio.bat`,
+which would flash a console window on launch). Includes a proper
+uninstaller.
+
 ## Why a script instead of "just run cmake"
 
 This project depends on a specific Qt-matched MinGW compiler that is
