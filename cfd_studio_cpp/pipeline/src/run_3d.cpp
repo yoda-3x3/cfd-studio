@@ -91,6 +91,12 @@ Run3DResult run_3d(const cfd::mesh::Mesh& mesh, const Run3DOptions& opts,
     if (!internal && opts.domain_mode != "external") {
         throw std::invalid_argument("run_3d: domain_mode must be \"external\" or \"internal\"");
     }
+    // Ground effect is an External-only concept (Internal's own lateral
+    // walls, y=0 included, are already no-slip for an unrelated reason --
+    // it's a pipe). Computing this once and using it everywhere below
+    // instead of the raw opts.ground_effect keeps Internal mode fully
+    // immune to a stray/stale flag, geometry cache included.
+    bool ground_effect_active = opts.ground_effect && !internal;
 
     std::optional<cfd::io::RunCache> cache;
     std::string geom_key, run_key_str;
@@ -98,7 +104,7 @@ Run3DResult run_3d(const cfd::mesh::Mesh& mesh, const Run3DOptions& opts,
         cache.emplace(*opts.cache_root);
         std::string mesh_sig = cfd::io::mesh_signature(mesh);
         geom_key = cfd::io::geometry_key(mesh_sig, opts.nx, opts.ny, opts.nz, opts.inflow_gap, opts.wake_gap,
-                                          opts.lateral_gap, opts.domain_mode);
+                                          opts.lateral_gap, opts.domain_mode, ground_effect_active, opts.altitude_gap);
         run_key_str = cfd::io::run_key(geom_key, opts.Re, opts.U_in, opts.n_steps, opts.output_every);
         if (!opts.force_rerun) {
             if (auto cached = cache->load_run(run_key_str)) {
@@ -109,7 +115,8 @@ Run3DResult run_3d(const cfd::mesh::Mesh& mesh, const Run3DOptions& opts,
 
     cfd::solvers::PreparedGeometry geo = internal
         ? cfd::solvers::prepare_internal_geometry(mesh, 1.0, opts.inflow_gap, opts.wake_gap)
-        : cfd::solvers::prepare_geometry(mesh, 1.0, opts.inflow_gap, opts.wake_gap, opts.lateral_gap);
+        : cfd::solvers::prepare_geometry(mesh, 1.0, opts.inflow_gap, opts.wake_gap, opts.lateral_gap,
+                                          ground_effect_active, opts.altitude_gap);
 
     std::vector<std::uint8_t> solid;
     double Lx = geo.Lx, Ly = geo.Ly, Lz = geo.Lz;
@@ -147,6 +154,7 @@ Run3DResult run_3d(const cfd::mesh::Mesh& mesh, const Run3DOptions& opts,
     config.U_in = opts.U_in;
     config.num_threads = opts.num_threads;
     config.domain_mode = internal ? cfd::solvers::DomainMode3D::Internal : cfd::solvers::DomainMode3D::External;
+    config.ground_effect = ground_effect_active;
 
     const cfd::solvers::KernelBackend& backend = (opts.num_threads && *opts.num_threads > 1)
                                                       ? cfd::solvers::threaded_backend()
@@ -155,7 +163,7 @@ Run3DResult run_3d(const cfd::mesh::Mesh& mesh, const Run3DOptions& opts,
     cfd::solvers::NavierStokes3D solver(config, backend, &solid);
 
     cfd::io::OpenFoamCaseWriter writer(opts.output_dir, opts.nx, opts.ny, opts.nz, solver.dx(), solver.dy(),
-                                        solver.dz(), solid, &geo.mesh, opts.domain_mode);
+                                        solver.dz(), solid, &geo.mesh, opts.domain_mode, ground_effect_active);
 
     auto write_step = [&]() {
         auto fields = solver.fields();

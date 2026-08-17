@@ -20,6 +20,12 @@ struct Run3DOptions {
     std::string mesh_name; // for cache bookkeeping/logging
     std::optional<int> num_threads;
     double inflow_gap = 1.5, wake_gap = 4.0, lateral_gap = 1.5;
+    // Opt-in, "external" domain_mode only (silently ignored for
+    // "internal" -- see run_3d's ground_effect_active): places the object
+    // altitude_gap*L above a no-slip ground plane at y=0 instead of
+    // centering it, for ground-effect simulations.
+    bool ground_effect = false;
+    double altitude_gap = 1.5;
     bool force_rerun = false;
     std::optional<std::string> cache_root; // unset -> caching disabled
 
