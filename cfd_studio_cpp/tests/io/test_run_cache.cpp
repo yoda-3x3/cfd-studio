@@ -45,6 +45,17 @@ TEST_CASE("geometry_key / run_key: deterministic and sensitive to their inputs",
     REQUIRE(k1 != k3);
     REQUIRE(k1 != k4);
 
+    // ground_effect/altitude_gap, defaulted (false/1.5), must reproduce
+    // today's exact key for every pre-existing call -- no stale-cache
+    // invalidation for callers that don't know about this option yet.
+    std::string k1_explicit_default = geometry_key(sig, 10, 10, 10, 1.5, 4.0, 1.5, "external", false, 1.5);
+    REQUIRE(k1_explicit_default == k1);
+
+    std::string k5 = geometry_key(sig, 10, 10, 10, 1.5, 4.0, 1.5, "external", true, 1.5);
+    std::string k6 = geometry_key(sig, 10, 10, 10, 1.5, 4.0, 1.5, "external", true, 2.0);
+    REQUIRE(k5 != k1); // ground_effect changes the key
+    REQUIRE(k6 != k5); // altitude_gap changes the key even with ground_effect held fixed
+
     std::string r1 = run_key(k1, 100.0, 1.0, 1000, 20);
     std::string r2 = run_key(k1, 100.0, 1.0, 1000, 20);
     std::string r3 = run_key(k1, 200.0, 1.0, 1000, 20); // different Re

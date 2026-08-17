@@ -21,7 +21,8 @@ namespace cfd::io {
 // solver3d/cache.py's geometry_key.
 [[nodiscard]] std::string geometry_key(
     const std::string& mesh_sig, int nx, int ny, int nz,
-    double inflow_gap, double wake_gap, double lateral_gap, const std::string& domain_mode = "external");
+    double inflow_gap, double wake_gap, double lateral_gap, const std::string& domain_mode = "external",
+    bool ground_effect = false, double altitude_gap = 1.5);
 
 // Run cache key: geometry key + physics/run settings. Port of
 // solver3d/cache.py's run_key.

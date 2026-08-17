@@ -41,9 +41,11 @@ std::string mesh_signature(const cfd::mesh::Mesh& mesh) {
 
 std::string geometry_key(
     const std::string& mesh_sig, int nx, int ny, int nz,
-    double inflow_gap, double wake_gap, double lateral_gap, const std::string& domain_mode) {
+    double inflow_gap, double wake_gap, double lateral_gap, const std::string& domain_mode,
+    bool ground_effect, double altitude_gap) {
     std::string payload = mesh_sig + "|" + std::to_string(nx) + "|" + std::to_string(ny) + "|" + std::to_string(nz)
-        + "|" + format_g6(inflow_gap) + "|" + format_g6(wake_gap) + "|" + format_g6(lateral_gap) + "|" + domain_mode;
+        + "|" + format_g6(inflow_gap) + "|" + format_g6(wake_gap) + "|" + format_g6(lateral_gap) + "|" + domain_mode
+        + "|" + (ground_effect ? "1" : "0") + "|" + format_g6(altitude_gap);
     return cfd::core::hash_hex(payload.data(), payload.size(), 24);
 }
 
