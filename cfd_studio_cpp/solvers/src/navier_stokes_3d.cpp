@@ -102,13 +102,16 @@ void NavierStokes3D::apply_velocity_bcs(Field3D& u, Field3D& v, Field3D& w) cons
     }
 
     // y = 0 / y = Ly: v is wall-normal (always mirror-negated to zero);
-    // u/w are tangential -- zero-gradient (free-slip, External) or
-    // mirror-negated to zero (no-slip, Internal).
+    // u/w are tangential -- zero-gradient (free-slip) or mirror-negated to
+    // zero (no-slip). y=0 is no-slip for Internal (pipe wall) OR External
+    // with ground_effect enabled (a ground plane); y=Ly (top) only goes
+    // no-slip for Internal -- ground effect never affects the top face.
+    bool wall_y0 = internal || cfg_.ground_effect;
     for (int i = 0; i <= nx + 1; ++i) {
         for (int k = 0; k <= nz + 1; ++k) {
             v(i, 0, k) = -v(i, 1, k);
-            u(i, 0, k) = internal ? -u(i, 1, k) : u(i, 1, k);
-            w(i, 0, k) = internal ? -w(i, 1, k) : w(i, 1, k);
+            u(i, 0, k) = wall_y0 ? -u(i, 1, k) : u(i, 1, k);
+            w(i, 0, k) = wall_y0 ? -w(i, 1, k) : w(i, 1, k);
             v(i, ny + 1, k) = -v(i, ny, k);
             u(i, ny + 1, k) = internal ? -u(i, ny, k) : u(i, ny, k);
             w(i, ny + 1, k) = internal ? -w(i, ny, k) : w(i, ny, k);

@@ -14,6 +14,22 @@ bool all_finite(const std::vector<double>& v) {
     }
     return true;
 }
+
+// Mean |tangential velocity| (u,w -- the components parallel to a y-face)
+// across the interior row at height index j, averaged over all (i,k).
+double avg_tangential_speed_at_j(const Fields3D& f, int nx, int ny, int nz, int j) {
+    double sum = 0.0;
+    for (int i = 0; i < nx; ++i) {
+        for (int k = 0; k < nz; ++k) {
+            std::size_t idx = static_cast<std::size_t>(i) * ny * nz + static_cast<std::size_t>(j) * nz
+                + static_cast<std::size_t>(k);
+            double u = f.velocity_u[idx];
+            double w = f.velocity_w[idx];
+            sum += std::sqrt(u * u + w * w);
+        }
+    }
+    return sum / (nx * nz);
+}
 } // namespace
 
 TEST_CASE("NavierStokes3D: external flow, no obstacle, stays finite over several steps", "[solvers][navier_stokes_3d]") {
@@ -70,6 +86,33 @@ TEST_CASE("NavierStokes3D: obstacle cells report zero velocity", "[solvers][navi
         }
     }
     REQUIRE(all_finite(f.velocity_u));
+}
+
+TEST_CASE("NavierStokes3D: ground_effect damps tangential velocity near y=0 but not near the top",
+          "[solvers][navier_stokes_3d]") {
+    auto near_ground_top_ratio = [](bool ground_effect) {
+        SolverConfig3D cfg;
+        cfg.nx = 16; cfg.ny = 10; cfg.nz = 8;
+        cfg.Lx = 4.0; cfg.Ly = 2.0; cfg.Lz = 1.5;
+        cfg.Re = 100.0;
+        cfg.U_in = 1.0;
+        cfg.domain_mode = DomainMode3D::External;
+        cfg.ground_effect = ground_effect;
+        NavierStokes3D solver(cfg, scalar_backend());
+        for (int s = 0; s < 30; ++s) solver.step();
+        Fields3D f = solver.fields();
+        double near_ground = avg_tangential_speed_at_j(f, cfg.nx, cfg.ny, cfg.nz, 0);
+        double near_top = avg_tangential_speed_at_j(f, cfg.nx, cfg.ny, cfg.nz, cfg.ny - 1);
+        REQUIRE(near_top > 1e-6); // sanity: there's flow to compare against
+        return near_ground / near_top;
+    };
+
+    // Measured 0.731 -- comfortable margin below 1 confirms the no-slip
+    // ground wall is actually damping the near-wall row, not just noise.
+    REQUIRE(near_ground_top_ratio(true) < 0.85);
+    // Without ground_effect both faces are free-slip and the flow (no
+    // obstacle) is trivially uniform -- ratio is exactly 1, not just close.
+    REQUIRE(near_ground_top_ratio(false) == Catch::Approx(1.0).margin(1e-9));
 }
 
 TEST_CASE("NavierStokes3D: internal (pipe) mode stays finite over several steps", "[solvers][navier_stokes_3d]") {

@@ -28,6 +28,11 @@ struct SolverConfig3D {
     double pressure_omega = 1.0;
     std::optional<int> num_threads; // applied to the backend at construction, if set
     DomainMode3D domain_mode = DomainMode3D::External;
+    // Opt-in, External-only: makes the y=0 face a no-slip wall (a ground
+    // plane) instead of free-slip, for ground-effect simulations. Has no
+    // effect when domain_mode is Internal, whose lateral faces (y=0
+    // included) are already no-slip regardless.
+    bool ground_effect = false;
 };
 
 // Interior-only (unpadded, nx*ny*nz) output fields, matching
