@@ -23,7 +23,8 @@ inline std::size_t idx3d(int i, int j, int k, int ny, int nz) {
 } // namespace
 
 PreparedGeometry prepare_geometry(
-    const Mesh& mesh_in, double target_max_extent, double inflow_gap, double wake_gap, double lateral_gap) {
+    const Mesh& mesh_in, double target_max_extent, double inflow_gap, double wake_gap, double lateral_gap,
+    bool ground_effect, double altitude_gap) {
     Mesh mesh = mesh_in;
     auto b0 = mesh.bounds();
     Vec3 original_extents = b0.extents();
@@ -39,12 +40,15 @@ PreparedGeometry prepare_geometry(
     Vec3 ext = b1.extents();
     double L = std::max({ext.x, ext.y, ext.z});
     double Lx = inflow_gap * L + ext.x + wake_gap * L;
-    double Ly = ext.y + 2 * lateral_gap * L;
+    // Ground effect: decouple the bottom (y=0, "ground") clearance from the
+    // top's, instead of centering symmetrically -- top clearance still
+    // uses lateral_gap, same as the unmodified case.
+    double Ly = ground_effect ? (ext.y + altitude_gap * L + lateral_gap * L) : (ext.y + 2 * lateral_gap * L);
     double Lz = ext.z + 2 * lateral_gap * L;
 
     Vec3 shift{
         inflow_gap * L - b1.min.x,
-        Ly / 2 - (b1.min.y + b1.max.y) / 2,
+        ground_effect ? (altitude_gap * L - b1.min.y) : (Ly / 2 - (b1.min.y + b1.max.y) / 2),
         Lz / 2 - (b1.min.z + b1.max.z) / 2,
     };
     mesh.translate(shift);

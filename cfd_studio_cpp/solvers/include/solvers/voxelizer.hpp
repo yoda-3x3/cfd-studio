@@ -21,9 +21,18 @@ struct PreparedGeometry {
 // number for the resulting simulation is defined using `target_max_extent`
 // as the characteristic length, since an uploaded file's original units
 // are otherwise meaningless.
+//
+// `ground_effect`/`altitude_gap` are a newer, opt-in addition (no Python
+// equivalent): when `ground_effect` is true, the object is placed
+// asymmetrically in Y -- `altitude_gap * L` of clearance beneath it (down
+// to the y=0 "ground" plane) instead of being vertically centered, with
+// the top clearance still governed by `lateral_gap` as before. When false
+// (the default), behavior is byte-identical to the original symmetric
+// centering -- `altitude_gap` is ignored.
 [[nodiscard]] PreparedGeometry prepare_geometry(
     const cfd::mesh::Mesh& mesh,
-    double target_max_extent = 1.0, double inflow_gap = 1.5, double wake_gap = 4.0, double lateral_gap = 1.5);
+    double target_max_extent = 1.0, double inflow_gap = 1.5, double wake_gap = 4.0, double lateral_gap = 1.5,
+    bool ground_effect = false, double altitude_gap = 1.5);
 
 // Centers, normalizes, and places a pipe/duct mesh for INTERNAL flow. Unlike
 // prepare_geometry's open-tunnel domain, there is no lateral clearance: the

@@ -109,6 +109,31 @@ TEST_CASE("prepare_geometry: centers and scales the mesh, sizes the tunnel domai
     REQUIRE(geo.original_extents.x == Catch::Approx(2.0));
 }
 
+TEST_CASE("prepare_geometry: ground_effect=false (default) is byte-identical to the centered formula",
+          "[solvers][voxelizer]") {
+    Mesh box = make_box(2.0, 1.0, 1.0);
+    auto centered = prepare_geometry(box, 1.0, 1.5, 4.0, 1.5);
+    auto explicit_false = prepare_geometry(box, 1.0, 1.5, 4.0, 1.5, false, 1.5);
+    REQUIRE(explicit_false.Ly == Catch::Approx(centered.Ly));
+    REQUIRE(explicit_false.mesh.bounds().min.y == Catch::Approx(centered.mesh.bounds().min.y).margin(1e-9));
+}
+
+TEST_CASE("prepare_geometry: ground_effect places the object asymmetrically above y=0", "[solvers][voxelizer]") {
+    Mesh box = make_box(2.0, 1.0, 1.0); // extents (2,1,1), max=2 -> normalized (1, 0.5, 0.5)
+    double lateral_gap = 1.5, altitude_gap = 0.5;
+    auto geo = prepare_geometry(box, 1.0, 1.5, 4.0, lateral_gap, true, altitude_gap);
+
+    double L = 1.0; // max extent after normalization
+    auto b = geo.mesh.bounds();
+    // Bottom clearance is altitude_gap*L (not centered); top clearance
+    // still uses lateral_gap*L, same as the unmodified formula's top half.
+    REQUIRE(b.min.y == Catch::Approx(altitude_gap * L).margin(1e-9));
+    REQUIRE(geo.Ly == Catch::Approx(0.5 + altitude_gap * L + lateral_gap * L));
+    // Z (true lateral axis) is untouched -- still centered in the domain.
+    REQUIRE(geo.Lz == Catch::Approx(0.5 + 2 * lateral_gap * L));
+    REQUIRE((b.min.z + b.max.z) / 2 == Catch::Approx(geo.Lz / 2).margin(1e-9));
+}
+
 TEST_CASE("prepare_internal_geometry: no lateral clearance, grid hugs the pipe", "[solvers][voxelizer]") {
     Mesh tube = make_open_square_tube(4.0, 1.0, 1.0);
     auto geo = prepare_internal_geometry(tube, 1.0, 0.0, 0.0);
