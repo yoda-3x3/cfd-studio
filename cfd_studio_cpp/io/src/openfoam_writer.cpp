@@ -54,9 +54,9 @@ inline std::size_t cell_flat(int i, int j, int k, int ny, int nz) {
 OpenFoamCaseWriter::OpenFoamCaseWriter(
     const std::string& case_dir, int nx, int ny, int nz, double dx, double dy, double dz,
     const std::vector<std::uint8_t>& solid_mask,
-    const Mesh* surface_mesh, const std::string& domain_mode)
-    : case_dir_(case_dir), domain_mode_(domain_mode), nx_(nx), ny_(ny), nz_(nz), dx_(dx), dy_(dy), dz_(dz),
-      surface_mesh_(surface_mesh) {
+    const Mesh* surface_mesh, const std::string& domain_mode, bool ground_effect)
+    : case_dir_(case_dir), domain_mode_(domain_mode), ground_effect_(ground_effect), nx_(nx), ny_(ny), nz_(nz),
+      dx_(dx), dy_(dy), dz_(dz), surface_mesh_(surface_mesh) {
     // A writer is only ever constructed for a genuinely fresh run (run_3d's
     // cache-hit path returns before reaching here), so anything already at
     // case_dir_ is stale -- most importantly, numbered timestep directories
@@ -463,7 +463,7 @@ std::string OpenFoamCaseWriter::boundary_field_vector() const {
             out << "        type            zeroGradient;\n";
         } else if (p.name == "object") {
             out << "        type            noSlip;\n";
-        } else if (domain_mode_ == "internal") {
+        } else if (domain_mode_ == "internal" || (ground_effect_ && p.name == "lowerWall")) {
             out << "        type            noSlip;\n";
         } else {
             out << "        type            slip;\n";

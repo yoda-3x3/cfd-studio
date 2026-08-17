@@ -37,7 +37,8 @@ public:
         const std::string& case_dir, int nx, int ny, int nz, double dx, double dy, double dz,
         const std::vector<std::uint8_t>& solid_mask,
         const cfd::mesh::Mesh* surface_mesh = nullptr,
-        const std::string& domain_mode = "external");
+        const std::string& domain_mode = "external",
+        bool ground_effect = false);
 
     // Writes U/p field files for one timestep. `u`,`v`,`w`,`p` are each a
     // full row-major (nx,ny,nz) array (including solid cells, whose values
@@ -72,6 +73,7 @@ private:
 
     std::string case_dir_;
     std::string domain_mode_;
+    bool ground_effect_ = false; // External-only: lowerWall exported as noSlip instead of slip
     int nx_, ny_, nz_;
     double dx_, dy_, dz_;
     const cfd::mesh::Mesh* surface_mesh_; // not owned, must outlive the writer

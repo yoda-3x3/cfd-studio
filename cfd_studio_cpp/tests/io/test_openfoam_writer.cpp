@@ -114,6 +114,45 @@ TEST_CASE("OpenFoamCaseWriter: obstacle with a matching surface mesh refines the
     verify_owner_lt_neighbour(dir);
 }
 
+TEST_CASE("OpenFoamCaseWriter: ground_effect exports lowerWall as noSlip, upperWall stays slip", "[io][openfoam_writer]") {
+    std::string dir = temp_case_dir("ground_effect_true");
+    int nx = 6, ny = 5, nz = 4;
+    std::vector<std::uint8_t> solid(static_cast<std::size_t>(nx) * ny * nz, 0);
+
+    OpenFoamCaseWriter writer(dir, nx, ny, nz, 0.1, 0.1, 0.1, solid, nullptr, "external", /*ground_effect=*/true);
+    std::vector<double> u(solid.size(), 1.0), v(solid.size(), 0.0), w(solid.size(), 0.0), p(solid.size(), 0.5);
+    writer.write_timestep(0.0, u.data(), v.data(), w.data(), p.data());
+
+    std::ifstream uf((fs::path(dir) / "0" / "U").string());
+    std::string u_text((std::istreambuf_iterator<char>(uf)), std::istreambuf_iterator<char>());
+    auto lower_pos = u_text.find("lowerWall");
+    auto upper_pos = u_text.find("upperWall");
+    REQUIRE(lower_pos != std::string::npos);
+    REQUIRE(upper_pos != std::string::npos);
+    std::string lower_block = u_text.substr(lower_pos, upper_pos - lower_pos);
+    std::string upper_block = u_text.substr(upper_pos, 200);
+    REQUIRE(lower_block.find("noSlip") != std::string::npos);
+    REQUIRE(upper_block.find("slip") != std::string::npos);
+    REQUIRE(upper_block.find("noSlip") == std::string::npos);
+}
+
+TEST_CASE("OpenFoamCaseWriter: ground_effect=false (default) keeps lowerWall as slip", "[io][openfoam_writer]") {
+    std::string dir = temp_case_dir("ground_effect_false");
+    int nx = 6, ny = 5, nz = 4;
+    std::vector<std::uint8_t> solid(static_cast<std::size_t>(nx) * ny * nz, 0);
+
+    OpenFoamCaseWriter writer(dir, nx, ny, nz, 0.1, 0.1, 0.1, solid); // ground_effect defaults to false
+    std::vector<double> u(solid.size(), 1.0), v(solid.size(), 0.0), w(solid.size(), 0.0), p(solid.size(), 0.5);
+    writer.write_timestep(0.0, u.data(), v.data(), w.data(), p.data());
+
+    std::ifstream uf((fs::path(dir) / "0" / "U").string());
+    std::string u_text((std::istreambuf_iterator<char>(uf)), std::istreambuf_iterator<char>());
+    auto lower_pos = u_text.find("lowerWall");
+    REQUIRE(lower_pos != std::string::npos);
+    std::string lower_block = u_text.substr(lower_pos, 200);
+    REQUIRE(lower_block.find("noSlip") == std::string::npos);
+}
+
 TEST_CASE("OpenFoamCaseWriter::write_timestep writes internalField entries matching the fluid cell count", "[io][openfoam_writer]") {
     std::string dir = temp_case_dir("timestep");
     int nx = 5, ny = 4, nz = 3;
