@@ -97,6 +97,17 @@ void ThreeDPanel::buildUi() {
     gapForm->addRow("Inflow gap:", inflowGapSpin_);
     gapForm->addRow("Wake gap:", wakeGapSpin_);
     gapForm->addRow("Lateral gap:", lateralGapSpin_);
+
+    groundEffectCheckbox_ = new QCheckBox("Simulate ground effect", geoGroup);
+    groundEffectCheckbox_->setToolTip("Only applies in External (object-in-tunnel) mode.");
+    altitudeGapSpin_ = new QDoubleSpinBox(geoGroup);
+    altitudeGapSpin_->setRange(0.05, 20);
+    altitudeGapSpin_->setValue(1.5);
+    altitudeGapSpin_->setEnabled(false);
+    gapForm->addRow(groundEffectCheckbox_);
+    gapForm->addRow("Altitude above ground:", altitudeGapSpin_);
+    connect(groundEffectCheckbox_, &QCheckBox::toggled, altitudeGapSpin_, &QWidget::setEnabled);
+
     geoLayout->addLayout(gapForm);
 
     leftLayout->addWidget(geoGroup);
@@ -365,6 +376,8 @@ void ThreeDPanel::setControlsEnabled(bool running) {
     inflowGapSpin_->setEnabled(!running);
     wakeGapSpin_->setEnabled(!running);
     lateralGapSpin_->setEnabled(!running);
+    groundEffectCheckbox_->setEnabled(!running);
+    altitudeGapSpin_->setEnabled(!running && groundEffectCheckbox_->isChecked());
     perfPresetCombo_->setEnabled(!running);
     nxSpin_->setEnabled(!running);
     nySpin_->setEnabled(!running);
@@ -411,6 +424,8 @@ void ThreeDPanel::onRunClicked() {
     opts.inflow_gap = inflowGapSpin_->value();
     opts.wake_gap = wakeGapSpin_->value();
     opts.lateral_gap = lateralGapSpin_->value();
+    opts.ground_effect = groundEffectCheckbox_->isChecked();
+    opts.altitude_gap = altitudeGapSpin_->value();
     opts.force_rerun = forceRerunCheckbox_->isChecked();
 
     xyVelocityPlot_->setHeatmapData({}, 0, 0);

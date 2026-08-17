@@ -66,6 +66,8 @@ private:
     QDoubleSpinBox* inflowGapSpin_ = nullptr;
     QDoubleSpinBox* wakeGapSpin_ = nullptr;
     QDoubleSpinBox* lateralGapSpin_ = nullptr;
+    QCheckBox* groundEffectCheckbox_ = nullptr;
+    QDoubleSpinBox* altitudeGapSpin_ = nullptr;
 
     // Case setup
     QComboBox* perfPresetCombo_ = nullptr;

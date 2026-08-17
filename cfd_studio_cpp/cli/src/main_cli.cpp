@@ -155,6 +155,8 @@ int cmd_3d(const Args& args) {
     opts.inflow_gap = get_double(args, "--inflow-gap", opts.inflow_gap);
     opts.wake_gap = get_double(args, "--wake-gap", opts.wake_gap);
     opts.lateral_gap = get_double(args, "--lateral-gap", opts.lateral_gap);
+    opts.ground_effect = args.has_flag("--ground-effect");
+    opts.altitude_gap = get_double(args, "--altitude-gap", opts.altitude_gap);
     opts.force_rerun = args.has_flag("--force-rerun");
     if (auto v = args.get("--cache-dir")) opts.cache_root = *v;
 
@@ -209,6 +211,7 @@ void print_usage() {
         "               [--domain-mode external|internal] [--preset fast_preview|balanced|high_quality]\n"
         "               [--nx N --ny N --nz N] [--re R] [--u-in U] [--steps N] [--output-every N]\n"
         "               [--threads N] [--inflow-gap F] [--wake-gap F] [--lateral-gap F]\n"
+        "               [--ground-effect] [--altitude-gap F]\n"
         "               [--orientation-rank 0|1|2] [--reverse-flow] [--force-rerun] [--cache-dir DIR]\n"
         "\n"
         "  cfd_headless gen-mesh --shape box|tube --out PATH.stl\n"
