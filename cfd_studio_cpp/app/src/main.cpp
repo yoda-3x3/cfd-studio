@@ -18,7 +18,7 @@ int main(int argc, char** argv) {
     QSurfaceFormat::setDefaultFormat(format);
 
     QApplication app(argc, argv);
-    app.setApplicationName("CFD Studio");
+    app.setApplicationName("Venturi CFD");
     app.setWindowIcon(QIcon(":/app_icon.ico"));
 
     // Unlike ui/splash.py, there's no multi-second import cost to cover

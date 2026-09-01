@@ -12,11 +12,11 @@
 #include <QTabWidget>
 
 namespace {
-constexpr const char* kAppTitle = "CFD Studio — 2D/3D Incompressible Flow with ParaView";
+constexpr const char* kAppTitle = "Venturi CFD — 2D/3D Incompressible Flow with ParaView";
 }
 
 MainWindow::MainWindow(QWidget* parent)
-    : QMainWindow(parent), settings_("CFDStudio", "CFDStudio") {
+    : QMainWindow(parent), settings_("VenturiCFD", "VenturiCFD") {
     setWindowTitle(kAppTitle);
     resize(1280, 820);
     setWindowIcon(QIcon(":/app_icon.ico"));
@@ -78,8 +78,8 @@ void MainWindow::applyTheme(const QString& key) {
 }
 
 void MainWindow::showAbout() {
-    QMessageBox::information(this, "About CFD Studio",
-                              "CFD Studio (C++/Qt6 rewrite)\n\n"
+    QMessageBox::information(this, "About Venturi CFD",
+                              "Venturi CFD (C++/Qt6 rewrite)\n\n"
                               "2D/3D incompressible Navier-Stokes solver with OpenFOAM/ParaView export.");
 }
 

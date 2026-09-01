@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    One-command build + test for CFD Studio's C++ rewrite (cfd_studio_cpp).
+    One-command build + test for Venturi CFD's C++ rewrite (cfd_studio_cpp).
 
 .DESCRIPTION
     Sets up the exact toolchain this project needs (the Qt-matched MinGW

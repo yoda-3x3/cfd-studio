@@ -33,7 +33,7 @@
 #include "solvers/performance_presets_3d.hpp"
 #include "widgets/plot_widget.hpp"
 
-ThreeDPanel::ThreeDPanel(QWidget* parent) : QWidget(parent), settings_("CFDStudio", "CFDStudio") {
+ThreeDPanel::ThreeDPanel(QWidget* parent) : QWidget(parent), settings_("VenturiCFD", "VenturiCFD") {
     buildUi();
 }
 

@@ -1,4 +1,4 @@
-# CFD Studio
+# Venturi CFD
 
 A desktop CFD app with a live preview and direct ParaView export, covering both quick
 2D scenarios and custom 3D geometry from an uploaded mesh file.
@@ -47,7 +47,7 @@ python -m venv .venv
 .venv\Scripts\pip.exe install -r requirements.txt
 ```
 -Another way to set it up is using the installer.
-[https://github.com/yoda-3x3/cfd-studio/blob/main/cfd_studio_cpp/installer/output/CFDStudioSetup.exe](url)
+[https://github.com/yoda-3x3/cfd-studio/blob/main/cfd_studio_cpp/installer/output/VenturiCFDSetup.exe](url)
 
 -Also, **REMEMBER TO INSTALL PARAVIEW TO DISPLAY RESULTS AT [paraview.org](url)
 ## Running it

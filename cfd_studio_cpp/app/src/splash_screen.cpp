@@ -177,7 +177,7 @@ CowSplashScreen::CowSplashScreen(QWidget* parent)
     root->setContentsMargins(28, 22, 28, 22);
     root->setSpacing(4);
 
-    auto* title = new QLabel("CFD Studio", this);
+    auto* title = new QLabel("Venturi CFD", this);
     title->setAlignment(Qt::AlignCenter);
     title->setStyleSheet("font-size: 20px; font-weight: 700; color: #1f2937;");
     root->addWidget(title);

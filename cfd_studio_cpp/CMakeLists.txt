@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(CfdStudio LANGUAGES CXX)
+project(VenturiCFD LANGUAGES CXX)
 
 if(WIN32)
     # Needed so app/resources/app_icon.rc (the exe's own PE icon resource,

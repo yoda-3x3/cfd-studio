@@ -1,6 +1,6 @@
 @echo off
 cd /d "%~dp0build\cli"
-echo CFD Studio (C++) -- cfd_headless CLI
+echo Venturi CFD (C++) -- cfd_headless CLI
 echo.
 echo Example commands:
 echo   cfd_headless 2d --scenario cavity --output-dir C:\path\to\output

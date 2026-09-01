@@ -45,7 +45,7 @@ const QMap<QString, ScenarioUiInfo>& scenarioUiInfo() {
 }
 } // namespace
 
-TwoDPanel::TwoDPanel(QWidget* parent) : QWidget(parent), settings_("CFDStudio", "CFDStudio") {
+TwoDPanel::TwoDPanel(QWidget* parent) : QWidget(parent), settings_("VenturiCFD", "VenturiCFD") {
     buildUi();
 }
 

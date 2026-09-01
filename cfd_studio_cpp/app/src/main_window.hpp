@@ -18,9 +18,10 @@ protected:
 
 private:
     void buildMenus();
-    // Applies the stylesheet and persists the choice under the same
-    // QSettings org/app/key ("CFDStudio"/"CFDStudio"/"theme") as
-    // ui/main_window.py's _apply_theme.
+    // Applies the stylesheet and persists the choice under QSettings
+    // org/app/key ("VenturiCFD"/"VenturiCFD"/"theme") -- diverges from
+    // ui/main_window.py's own "CFDStudio"/"CFDStudio" (the Python app is a
+    // frozen spec, not rebranded) since this C++ app now has its own name.
     void applyTheme(const QString& key);
     void showAbout();
 

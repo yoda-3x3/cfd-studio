@@ -1,4 +1,4 @@
-# Building CFD Studio (C++)
+# Building Venturi CFD (C++)
 
 ## One-time setup
 
@@ -76,10 +76,10 @@ After a normal `.\build.ps1 -BuildGui` build:
 & "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer\cfd_studio.iss
 ```
 
-Produces `installer\output\CFDStudioSetup.exe` — packages whatever
+Produces `installer\output\VenturiCFDSetup.exe` — packages whatever
 `windeployqt` deployed to `build\app\` (see `cmake\DeployQt.cmake`), so it
 picks up dependency changes automatically rather than duplicating the DLL
-list. Installs per-user to `%LOCALAPPDATA%\CFD Studio` (`PrivilegesRequired
+list. Installs per-user to `%LOCALAPPDATA%\Venturi CFD` (`PrivilegesRequired
 = lowest` — no admin/UAC prompt), with Start Menu + optional desktop
 shortcuts pointing straight at `cfd_studio.exe` (not `launch_cfd_studio.bat`,
 which would flash a console window on launch). Includes a proper

@@ -1,4 +1,4 @@
-; Inno Setup script for CFD Studio (C++/Qt6).
+; Inno Setup script for Venturi CFD (C++/Qt6).
 ;
 ; Packages the already-standalone windeployqt output (build\app\) -- see
 ; cmake/DeployQt.cmake -- so this only zips up what's already there rather
@@ -18,16 +18,16 @@
 
 [Setup]
 AppId={{167606BB-4C5C-4744-BC03-903CD72C3A63}
-AppName=CFD Studio
+AppName=Venturi CFD
 AppVersion=1.0
-AppPublisher=CFD Studio
-DefaultDirName={localappdata}\CFD Studio
+AppPublisher=Venturi CFD
+DefaultDirName={localappdata}\Venturi CFD
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=output
-OutputBaseFilename=CFDStudioSetup
+OutputBaseFilename=VenturiCFDSetup
 SetupIconFile={#AppIcon}
 UninstallDisplayIcon={app}\cfd_studio.exe
 Compression=lzma2
@@ -44,8 +44,8 @@ Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription
 Source: "{#AppSourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "Makefile,cmake_install.cmake,CMakeFiles,cfd_studio_autogen,runs"
 
 [Icons]
-Name: "{userprograms}\CFD Studio"; Filename: "{app}\cfd_studio.exe"
-Name: "{userdesktop}\CFD Studio"; Filename: "{app}\cfd_studio.exe"; Tasks: desktopicon
+Name: "{userprograms}\Venturi CFD"; Filename: "{app}\cfd_studio.exe"
+Name: "{userdesktop}\Venturi CFD"; Filename: "{app}\cfd_studio.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\cfd_studio.exe"; Description: "Launch CFD Studio"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\cfd_studio.exe"; Description: "Launch Venturi CFD"; Flags: nowait postinstall skipifsilent

@@ -1,4 +1,4 @@
-// cfd_headless: the numerics-only CLI for CFD Studio's C++ rewrite --
+// cfd_headless: the numerics-only CLI for Venturi CFD's C++ rewrite --
 // mesh load -> orient -> voxelize -> solve -> write OpenFOAM/VTK, exercised
 // end to end before any GUI work starts (Phase 5). Also hosts `gen-mesh`, a
 // small reusable synthetic-mesh generator (box/tube primitives) for cases
