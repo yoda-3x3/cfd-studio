@@ -12,6 +12,7 @@
 #include <QTimer>
 #include <QVBoxLayout>
 
+#include "widgets/color_legend_widget.hpp"
 #include "widgets/results_viewer_widget.hpp"
 
 namespace {
@@ -28,7 +29,7 @@ ResultsViewerDialog::ResultsViewerDialog(const cfd::mesh::Mesh& mesh, std::share
 
 void ResultsViewerDialog::buildUi(const cfd::mesh::Mesh& mesh, const Theme& theme) {
     setWindowTitle("Results Viewer");
-    resize(950, 680);
+    resize(1030, 680);
 
     auto* root = new QHBoxLayout(this);
 
@@ -37,6 +38,12 @@ void ResultsViewerDialog::buildUi(const cfd::mesh::Mesh& mesh, const Theme& them
     viewer_->setMesh(mesh);
     viewer_->setResultsCache(reader_);
     root->addWidget(viewer_, 1);
+
+    legend_ = new ColorLegendWidget(this);
+    legend_->setTheme(theme);
+    legend_->setFieldName("Velocity magnitude"); // matches fieldCombo_'s default (index 0) below
+    root->addWidget(legend_);
+    connect(viewer_, &ResultsViewerWidget::valueRangeChanged, legend_, &ColorLegendWidget::setRange);
 
     auto* side = new QWidget(this);
     side->setFixedWidth(260);
@@ -106,6 +113,7 @@ void ResultsViewerDialog::buildUi(const cfd::mesh::Mesh& mesh, const Theme& them
 
 void ResultsViewerDialog::onScalarFieldChanged(int index) {
     viewer_->setScalarField(static_cast<ResultsViewerWidget::ScalarField>(index));
+    legend_->setFieldName(fieldCombo_->currentText());
 }
 
 void ResultsViewerDialog::onAxisToggled() {

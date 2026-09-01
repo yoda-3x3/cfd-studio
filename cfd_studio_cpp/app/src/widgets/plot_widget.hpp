@@ -47,7 +47,6 @@ protected:
 private:
     void paintHeatmap(QPainter& painter);
     void paintLogLine(QPainter& painter);
-    [[nodiscard]] QColor colormapSample(double t) const;
 
     Mode mode_;
     Theme theme_;

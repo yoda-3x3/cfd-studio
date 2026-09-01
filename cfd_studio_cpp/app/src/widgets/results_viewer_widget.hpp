@@ -56,6 +56,11 @@ public:
     void setSliceAxis(Axis axis);
     void setSlicePosition(double t); // 0..1, normalized along the slice axis
 
+signals:
+    // Fired whenever the displayed slice's value range changes (new frame,
+    // field, axis, or position) -- drives ColorLegendWidget's bar.
+    void valueRangeChanged(double vmin, double vmax);
+
 protected:
     void initializeGL() override;
     void resizeGL(int w, int h) override;

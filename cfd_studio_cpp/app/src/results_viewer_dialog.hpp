@@ -15,6 +15,7 @@ class QPushButton;
 class QLabel;
 class QTimer;
 class ResultsViewerWidget;
+class ColorLegendWidget;
 
 // Non-modal ("show()", not "exec()" -- the user can keep using the rest of
 // the app while this is open) window hosting a ResultsViewerWidget plus
@@ -45,6 +46,7 @@ private:
     std::shared_ptr<cfd::io::ResultsCacheReader> reader_;
 
     ResultsViewerWidget* viewer_ = nullptr;
+    ColorLegendWidget* legend_ = nullptr;
     QComboBox* fieldCombo_ = nullptr;
     QRadioButton* axisXRadio_ = nullptr;
     QRadioButton* axisYRadio_ = nullptr;

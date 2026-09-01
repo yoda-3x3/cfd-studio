@@ -15,9 +15,11 @@ qt_add_executable(cfd_studio
     src/orientation_dialog.cpp
     src/results_viewer_dialog.cpp
     src/splash_screen.cpp
+    src/colormap.cpp
     src/widgets/plot_widget.cpp
     src/widgets/mesh_preview_widget.cpp
     src/widgets/results_viewer_widget.cpp
+    src/widgets/color_legend_widget.cpp
     resources/app_icon.qrc
     resources/app_icon.rc
 )

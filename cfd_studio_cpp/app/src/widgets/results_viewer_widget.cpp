@@ -333,6 +333,7 @@ void ResultsViewerWidget::rebuildSlice() {
     sliceProgram_->release();
 
     haveSlice_ = true;
+    emit valueRangeChanged(vmin, vmax);
 }
 
 QMatrix4x4 ResultsViewerWidget::viewMatrix() const {
