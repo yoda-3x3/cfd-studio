@@ -2,6 +2,8 @@ add_library(cfd_io STATIC
     src/openfoam_writer.cpp
     src/vtk_writer.cpp
     src/run_cache.cpp
+    src/results_cache_writer.cpp
+    src/results_cache_reader.cpp
 )
 
 target_include_directories(cfd_io PUBLIC

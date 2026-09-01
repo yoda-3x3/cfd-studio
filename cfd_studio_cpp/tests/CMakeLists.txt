@@ -19,6 +19,7 @@ add_executable(cfd_tests
     io/test_openfoam_writer.cpp
     io/test_vtk_writer.cpp
     io/test_run_cache.cpp
+    io/test_results_cache.cpp
     pipeline/test_run_2d.cpp
     pipeline/test_run_3d.cpp
     pipeline/test_preview.cpp
