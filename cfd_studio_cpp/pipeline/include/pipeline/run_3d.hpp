@@ -37,6 +37,17 @@ struct Run3DOptions {
 
 struct Run3DResult {
     std::string foam_path;
+    // Sibling of foam_path's own case directory -- see
+    // io::ResultsCacheWriter, the source of truth this app's own in-app
+    // results viewer reads from a completed run (deliberately not a
+    // round-trip through the OpenFOAM case export). Derived from foam_path
+    // rather than opts.output_dir, since on a cache hit (was_cached=true)
+    // foam_path points at whichever earlier run's output_dir actually
+    // produced it -- that run's own results cache lives alongside it, not
+    // under the current call's opts.output_dir. Reading it back may still
+    // fail (e.g. a cache entry from before this field existed) -- callers
+    // should handle that as "no results available," not a hard error.
+    std::string results_cache_dir;
     bool was_cached = false;
     int steps_run = 0;
     double final_residual = 0.0;

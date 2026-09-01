@@ -3,10 +3,12 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <stdexcept>
 #include <utility>
 
 #include "io/openfoam_writer.hpp"
+#include "io/results_cache_writer.hpp"
 #include "io/run_cache.hpp"
 #include "solvers/kernel_backend.hpp"
 #include "solvers/navier_stokes_3d.hpp"
@@ -108,7 +110,11 @@ Run3DResult run_3d(const cfd::mesh::Mesh& mesh, const Run3DOptions& opts,
         run_key_str = cfd::io::run_key(geom_key, opts.Re, opts.U_in, opts.n_steps, opts.output_every);
         if (!opts.force_rerun) {
             if (auto cached = cache->load_run(run_key_str)) {
-                return Run3DResult{*cached, true, 0, 0.0};
+                Run3DResult result;
+                result.foam_path = *cached;
+                result.results_cache_dir = (std::filesystem::path(*cached).parent_path() / "resultsCache").string();
+                result.was_cached = true;
+                return result;
             }
         }
     }
@@ -164,17 +170,23 @@ Run3DResult run_3d(const cfd::mesh::Mesh& mesh, const Run3DOptions& opts,
 
     cfd::io::OpenFoamCaseWriter writer(opts.output_dir, opts.nx, opts.ny, opts.nz, solver.dx(), solver.dy(),
                                         solver.dz(), solid, &geo.mesh, opts.domain_mode, ground_effect_active);
+    cfd::io::ResultsCacheWriter results_writer(
+        opts.output_dir, opts.nx, opts.ny, opts.nz, solver.dx(), solver.dy(), solver.dz(), opts.domain_mode);
 
+    int frame_index = 0;
     auto write_step = [&]() {
         auto fields = solver.fields();
         writer.write_timestep(solver.time(), fields.velocity_u.data(), fields.velocity_v.data(),
                                fields.velocity_w.data(), fields.pressure.data());
+        results_writer.write_frame(frame_index++, solver.time(), fields.velocity_u, fields.velocity_v,
+                                    fields.velocity_w, fields.velocity_magnitude, fields.pressure, fields.obstacle);
     };
 
     write_step();
 
     Run3DResult result;
     result.foam_path = writer.foam_path();
+    result.results_cache_dir = results_writer.cache_dir();
 
     auto last_update = std::chrono::steady_clock::now();
     for (int step = 1; step <= opts.n_steps; ++step) {
