@@ -2,11 +2,14 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include <QColor>
 #include <QMouseEvent>
 #include <QVector2D>
 #include <QWheelEvent>
+
+#include "colormap.hpp"
 
 namespace {
 constexpr float kDegToRad = 3.14159265358979323846f / 180.0f;
@@ -88,6 +91,29 @@ void main() {
     fragColor = vec4(colormap(t), 1.0);
 }
 )";
+
+// Shared by streamlines (GL_LINE_STRIP) and arrow glyphs (GL_LINES) --
+// both are just per-vertex-colored line segments.
+const char* kVectorVertexShader = R"(
+#version 330 core
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec3 aColor;
+uniform mat4 uMvp;
+out vec3 vColor;
+void main() {
+    vColor = aColor;
+    gl_Position = uMvp * vec4(aPos, 1.0);
+}
+)";
+
+const char* kVectorFragmentShader = R"(
+#version 330 core
+in vec3 vColor;
+out vec4 fragColor;
+void main() {
+    fragColor = vec4(vColor, 1.0);
+}
+)";
 } // namespace
 
 ResultsViewerWidget::ResultsViewerWidget(QWidget* parent) : QOpenGLWidget(parent) {
@@ -98,6 +124,8 @@ ResultsViewerWidget::~ResultsViewerWidget() {
     makeCurrent();
     meshVbo_.destroy();
     sliceVbo_.destroy();
+    streamlineVbo_.destroy();
+    arrowVbo_.destroy();
     if (sliceTexture_ != 0) glDeleteTextures(1, &sliceTexture_);
     doneCurrent();
 }
@@ -121,9 +149,18 @@ void ResultsViewerWidget::initializeGL() {
     sliceProgram_->addShaderFromSourceCode(QOpenGLShader::Fragment, kSliceFragmentShader);
     sliceProgram_->link();
 
+    vectorProgram_ = std::make_unique<QOpenGLShaderProgram>();
+    vectorProgram_->addShaderFromSourceCode(QOpenGLShader::Vertex, kVectorVertexShader);
+    vectorProgram_->addShaderFromSourceCode(QOpenGLShader::Fragment, kVectorFragmentShader);
+    vectorProgram_->link();
+
     meshVao_.create();
     sliceVao_.create();
     sliceVbo_.create();
+    streamlineVao_.create();
+    streamlineVbo_.create();
+    arrowVao_.create();
+    arrowVbo_.create();
 
     glGenTextures(1, &sliceTexture_);
     glBindTexture(GL_TEXTURE_2D, sliceTexture_);
@@ -182,6 +219,8 @@ void ResultsViewerWidget::setFrame(int index) {
     frameIndex_ = index;
     haveFrame_ = true;
     sliceDirty_ = true;
+    streamlinesDirty_ = true; // velocity field changed
+    arrowsDirty_ = true;
     update();
 }
 
@@ -194,12 +233,26 @@ void ResultsViewerWidget::setScalarField(ScalarField field) {
 void ResultsViewerWidget::setSliceAxis(Axis axis) {
     axis_ = axis;
     sliceDirty_ = true;
+    arrowsDirty_ = true; // arrows are sampled on the slice plane's own grid
     update();
 }
 
 void ResultsViewerWidget::setSlicePosition(double t) {
     slicePosition_ = std::clamp(t, 0.0, 1.0);
     sliceDirty_ = true;
+    arrowsDirty_ = true;
+    update();
+}
+
+void ResultsViewerWidget::setShowStreamlines(bool show) {
+    showStreamlines_ = show;
+    if (show) streamlinesDirty_ = true;
+    update();
+}
+
+void ResultsViewerWidget::setShowVelocityArrows(bool show) {
+    showArrows_ = show;
+    if (show) arrowsDirty_ = true;
     update();
 }
 
@@ -336,6 +389,230 @@ void ResultsViewerWidget::rebuildSlice() {
     emit valueRangeChanged(vmin, vmax);
 }
 
+bool ResultsViewerWidget::isSolidCell(int i, int j, int k) const {
+    if (!reader_) return false;
+    int nx = reader_->nx(), ny = reader_->ny(), nz = reader_->nz();
+    if (i < 0 || i >= nx || j < 0 || j >= ny || k < 0 || k >= nz) return false;
+    std::size_t idx = static_cast<std::size_t>(i) * static_cast<std::size_t>(ny) * static_cast<std::size_t>(nz)
+                     + static_cast<std::size_t>(j) * static_cast<std::size_t>(nz) + static_cast<std::size_t>(k);
+    return idx < currentFrame_.obstacle.size() && currentFrame_.obstacle[idx] != 0.0f;
+}
+
+QVector3D ResultsViewerWidget::sampleVelocity(double x, double y, double z) const {
+    if (!haveFrame_ || !reader_) return {};
+    int nx = reader_->nx(), ny = reader_->ny(), nz = reader_->nz();
+    double dx = reader_->dx(), dy = reader_->dy(), dz = reader_->dz();
+
+    // Same no-cell-center-offset convention rebuildSlice() already uses
+    // (texel col/row map directly to [0,Lx]/[0,Ly]/[0,Lz] without a
+    // half-cell shift) -- consistent within this widget, good enough for
+    // visualization, not meant for quantitative sampling.
+    double fi = x / dx, fj = y / dy, fk = z / dz;
+    int i0 = static_cast<int>(std::floor(fi));
+    int j0 = static_cast<int>(std::floor(fj));
+    int k0 = static_cast<int>(std::floor(fk));
+    double tx = fi - i0, ty = fj - j0, tz = fk - k0;
+
+    auto clampi = [](int v, int n) { return std::clamp(v, 0, n - 1); };
+    auto at = [&](const std::vector<double>& field, int i, int j, int k) {
+        i = clampi(i, nx);
+        j = clampi(j, ny);
+        k = clampi(k, nz);
+        std::size_t idx = static_cast<std::size_t>(i) * static_cast<std::size_t>(ny) * static_cast<std::size_t>(nz)
+                         + static_cast<std::size_t>(j) * static_cast<std::size_t>(nz) + static_cast<std::size_t>(k);
+        return field[idx];
+    };
+    auto trilerp = [&](const std::vector<double>& field) {
+        double c00 = at(field, i0, j0, k0) * (1 - tx) + at(field, i0 + 1, j0, k0) * tx;
+        double c01 = at(field, i0, j0, k0 + 1) * (1 - tx) + at(field, i0 + 1, j0, k0 + 1) * tx;
+        double c10 = at(field, i0, j0 + 1, k0) * (1 - tx) + at(field, i0 + 1, j0 + 1, k0) * tx;
+        double c11 = at(field, i0, j0 + 1, k0 + 1) * (1 - tx) + at(field, i0 + 1, j0 + 1, k0 + 1) * tx;
+        double c0 = c00 * (1 - ty) + c10 * ty;
+        double c1 = c01 * (1 - ty) + c11 * ty;
+        return c0 * (1 - tz) + c1 * tz;
+    };
+    return QVector3D(static_cast<float>(trilerp(currentFrame_.velocity_u)),
+                      static_cast<float>(trilerp(currentFrame_.velocity_v)),
+                      static_cast<float>(trilerp(currentFrame_.velocity_w)));
+}
+
+std::vector<QVector3D> ResultsViewerWidget::traceStreamline(QVector3D start) const {
+    std::vector<QVector3D> pts;
+    if (!reader_) return pts;
+    double Lx = reader_->nx() * reader_->dx(), Ly = reader_->ny() * reader_->dy(), Lz = reader_->nz() * reader_->dz();
+    double dx = reader_->dx(), dy = reader_->dy(), dz = reader_->dz();
+    float h = static_cast<float>(0.5 * std::min({dx, dy, dz})); // fixed arc-length step, not a time step
+    constexpr int kMaxSteps = 800;
+    constexpr float kMinSpeed = 1e-6f;
+
+    QVector3D p = start;
+    for (int step = 0; step < kMaxSteps; ++step) {
+        if (p.x() < 0 || p.x() > Lx || p.y() < 0 || p.y() > Ly || p.z() < 0 || p.z() > Lz) break;
+        int i = static_cast<int>(p.x() / dx), j = static_cast<int>(p.y() / dy), k = static_cast<int>(p.z() / dz);
+        if (isSolidCell(i, j, k)) break;
+        pts.push_back(p);
+
+        // Classic RK4 stages, but the final combined vector is normalized
+        // and used as a fixed-length step (not vel*dt) -- keeps step count
+        // bounded regardless of local speed (near-stagnant recirculation
+        // zones would otherwise take forever to advance), while RK4's
+        // multi-sample blending still captures curvature better than a
+        // single Euler sample per step.
+        QVector3D k1 = sampleVelocity(p.x(), p.y(), p.z());
+        QVector3D p2 = p + k1 * (h * 0.5f);
+        QVector3D k2 = sampleVelocity(p2.x(), p2.y(), p2.z());
+        QVector3D p3 = p + k2 * (h * 0.5f);
+        QVector3D k3 = sampleVelocity(p3.x(), p3.y(), p3.z());
+        QVector3D p4 = p + k3 * h;
+        QVector3D k4 = sampleVelocity(p4.x(), p4.y(), p4.z());
+        QVector3D blended = (k1 + k2 * 2.0f + k3 * 2.0f + k4) * (1.0f / 6.0f);
+        if (blended.length() < kMinSpeed) break;
+        p = p + blended.normalized() * h;
+    }
+    return pts;
+}
+
+void ResultsViewerWidget::rebuildStreamlines() {
+    streamlinesDirty_ = false;
+    streamlineRunLengths_.clear();
+    if (!haveFrame_ || !reader_ || !showStreamlines_) return;
+
+    double Lx = reader_->nx() * reader_->dx(), Ly = reader_->ny() * reader_->dy(), Lz = reader_->nz() * reader_->dz();
+    constexpr int kSeedGrid = 6; // 6x6 seeds across the inflow face
+
+    std::vector<std::vector<QVector3D>> lines;
+    for (int a = 0; a < kSeedGrid; ++a) {
+        for (int b = 0; b < kSeedGrid; ++b) {
+            float y = static_cast<float>((a + 0.5) / kSeedGrid * Ly);
+            float z = static_cast<float>((b + 0.5) / kSeedGrid * Lz);
+            QVector3D seed(static_cast<float>(0.02 * Lx), y, z);
+            int i = static_cast<int>(seed.x() / reader_->dx());
+            int j = static_cast<int>(seed.y() / reader_->dy());
+            int k = static_cast<int>(seed.z() / reader_->dz());
+            if (isSolidCell(i, j, k)) continue;
+            auto line = traceStreamline(seed);
+            if (line.size() >= 2) lines.push_back(std::move(line));
+        }
+    }
+
+    // Color by local speed, normalized against this streamline set's own
+    // min/max -- independent of the slice's field/range (streamlines are
+    // always a velocity-direction visualization, whatever scalar the
+    // slice happens to be showing).
+    float vmin = std::numeric_limits<float>::infinity(), vmax = -std::numeric_limits<float>::infinity();
+    for (const auto& line : lines) {
+        for (const auto& p : line) {
+            float speed = sampleVelocity(p.x(), p.y(), p.z()).length();
+            vmin = std::min(vmin, speed);
+            vmax = std::max(vmax, speed);
+        }
+    }
+    float range = (vmax > vmin) ? (vmax - vmin) : 1.0f;
+
+    std::vector<float> vertexData;
+    for (const auto& line : lines) {
+        for (const auto& p : line) {
+            float speed = sampleVelocity(p.x(), p.y(), p.z()).length();
+            QColor c = colormap_sample((speed - vmin) / range);
+            vertexData.insert(vertexData.end(), {p.x(), p.y(), p.z(), static_cast<float>(c.redF()),
+                                                  static_cast<float>(c.greenF()), static_cast<float>(c.blueF())});
+        }
+        streamlineRunLengths_.push_back(static_cast<int>(line.size()));
+    }
+
+    streamlineVao_.bind();
+    streamlineVbo_.bind();
+    streamlineVbo_.allocate(vertexData.data(), static_cast<int>(vertexData.size() * sizeof(float)));
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), reinterpret_cast<void*>(0));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), reinterpret_cast<void*>(3 * sizeof(float)));
+    streamlineVbo_.release();
+    streamlineVao_.release();
+}
+
+void ResultsViewerWidget::rebuildArrows() {
+    arrowsDirty_ = false;
+    arrowVertexCount_ = 0;
+    if (!haveFrame_ || !reader_ || !showArrows_) return;
+
+    int nx = reader_->nx(), ny = reader_->ny(), nz = reader_->nz();
+    double dx = reader_->dx(), dy = reader_->dy(), dz = reader_->dz();
+    double Lx = nx * dx, Ly = ny * dy, Lz = nz * dz;
+    constexpr int kGrid = 10; // subsample the slice plane to a 10x10 arrow grid, regardless of solver resolution
+    float maxArrowLen = static_cast<float>(std::min({dx, dy, dz}) * (kGrid / 3.0));
+
+    struct Sample {
+        QVector3D pos;
+        QVector3D vel;
+    };
+    std::vector<Sample> samples;
+    auto collect = [&](auto makePos) {
+        for (int a = 0; a < kGrid; ++a) {
+            for (int b = 0; b < kGrid; ++b) {
+                QVector3D pos = makePos((a + 0.5) / kGrid, (b + 0.5) / kGrid);
+                int i = static_cast<int>(pos.x() / dx), j = static_cast<int>(pos.y() / dy), k = static_cast<int>(pos.z() / dz);
+                if (isSolidCell(i, j, k)) continue;
+                samples.push_back({pos, sampleVelocity(pos.x(), pos.y(), pos.z())});
+            }
+        }
+    };
+    if (axis_ == Axis::X) {
+        float x = static_cast<float>(std::clamp(std::lround(slicePosition_ * (nx - 1)), 0L, static_cast<long>(nx - 1)) * dx);
+        collect([&](double u, double v) { return QVector3D(x, static_cast<float>(v * Ly), static_cast<float>(u * Lz)); });
+    } else if (axis_ == Axis::Y) {
+        float y = static_cast<float>(std::clamp(std::lround(slicePosition_ * (ny - 1)), 0L, static_cast<long>(ny - 1)) * dy);
+        collect([&](double u, double v) { return QVector3D(static_cast<float>(u * Lx), y, static_cast<float>(v * Lz)); });
+    } else {
+        float z = static_cast<float>(std::clamp(std::lround(slicePosition_ * (nz - 1)), 0L, static_cast<long>(nz - 1)) * dz);
+        collect([&](double u, double v) { return QVector3D(static_cast<float>(u * Lx), static_cast<float>(v * Ly), z); });
+    }
+
+    float vmin = std::numeric_limits<float>::infinity(), vmax = -std::numeric_limits<float>::infinity();
+    for (const auto& s : samples) {
+        vmin = std::min(vmin, s.vel.length());
+        vmax = std::max(vmax, s.vel.length());
+    }
+    float range = (vmax > vmin) ? (vmax - vmin) : 1.0f;
+
+    std::vector<float> vertexData;
+    for (const auto& s : samples) {
+        float speed = s.vel.length();
+        if (speed < 1e-6f) continue;
+        QVector3D dir = s.vel / speed;
+        float len = std::min(speed / vmax, 1.0f) * maxArrowLen;
+        QColor c = colormap_sample((speed - vmin) / range);
+        QVector3D color(static_cast<float>(c.redF()), static_cast<float>(c.greenF()), static_cast<float>(c.blueF()));
+
+        QVector3D tip = s.pos + dir * len;
+        QVector3D perp = QVector3D::crossProduct(dir, QVector3D(0, 1, 0));
+        if (perp.lengthSquared() < 1e-6f) perp = QVector3D::crossProduct(dir, QVector3D(1, 0, 0));
+        perp.normalize();
+        float headSize = len * 0.35f;
+        QVector3D back = tip - dir * headSize;
+        auto pushVert = [&](const QVector3D& p) {
+            vertexData.insert(vertexData.end(), {p.x(), p.y(), p.z(), color.x(), color.y(), color.z()});
+        };
+        pushVert(s.pos);
+        pushVert(tip); // shaft
+        pushVert(tip);
+        pushVert(back + perp * headSize * 0.5f); // head leg 1
+        pushVert(tip);
+        pushVert(back - perp * headSize * 0.5f); // head leg 2
+    }
+    arrowVertexCount_ = static_cast<int>(vertexData.size() / 6);
+
+    arrowVao_.bind();
+    arrowVbo_.bind();
+    arrowVbo_.allocate(vertexData.data(), static_cast<int>(vertexData.size() * sizeof(float)));
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), reinterpret_cast<void*>(0));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), reinterpret_cast<void*>(3 * sizeof(float)));
+    arrowVbo_.release();
+    arrowVao_.release();
+}
+
 QMatrix4x4 ResultsViewerWidget::viewMatrix() const {
     float yawRad = yaw_ * kDegToRad;
     float pitchRad = pitch_ * kDegToRad;
@@ -362,6 +639,8 @@ void ResultsViewerWidget::paintGL() {
 
     if (meshDirty_ && haveMesh_) rebuildMeshGeometry();
     if (sliceDirty_) rebuildSlice();
+    if (streamlinesDirty_) rebuildStreamlines();
+    if (arrowsDirty_) rebuildArrows();
 
     QMatrix4x4 mvp = projectionMatrix() * viewMatrix();
 
@@ -389,6 +668,28 @@ void ResultsViewerWidget::paintGL() {
         glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
         sliceVao_.release();
         sliceProgram_->release();
+    }
+
+    if ((showStreamlines_ && !streamlineRunLengths_.empty()) || (showArrows_ && arrowVertexCount_ > 0)) {
+        vectorProgram_->bind();
+        vectorProgram_->setUniformValue("uMvp", mvp);
+
+        if (showStreamlines_ && !streamlineRunLengths_.empty()) {
+            streamlineVao_.bind();
+            int offset = 0;
+            for (int count : streamlineRunLengths_) {
+                glDrawArrays(GL_LINE_STRIP, offset, count);
+                offset += count;
+            }
+            streamlineVao_.release();
+        }
+        if (showArrows_ && arrowVertexCount_ > 0) {
+            arrowVao_.bind();
+            glDrawArrays(GL_LINES, 0, arrowVertexCount_);
+            arrowVao_.release();
+        }
+
+        vectorProgram_->release();
     }
 }
 

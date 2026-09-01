@@ -10,6 +10,7 @@
 
 class QComboBox;
 class QRadioButton;
+class QCheckBox;
 class QSlider;
 class QPushButton;
 class QLabel;
@@ -52,6 +53,8 @@ private:
     QRadioButton* axisYRadio_ = nullptr;
     QRadioButton* axisZRadio_ = nullptr;
     QSlider* sliceSlider_ = nullptr;
+    QCheckBox* streamlinesCheckbox_ = nullptr;
+    QCheckBox* arrowsCheckbox_ = nullptr;
     QSlider* frameSlider_ = nullptr;
     QLabel* frameTimeLabel_ = nullptr;
     QPushButton* playPauseButton_ = nullptr;

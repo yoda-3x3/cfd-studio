@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QFormLayout>
 #include <QHBoxLayout>
@@ -82,6 +83,14 @@ void ResultsViewerDialog::buildUi(const cfd::mesh::Mesh& mesh, const Theme& them
     sliceSlider_->setValue(kSlicePositionSteps / 2);
     sideLayout->addWidget(sliceSlider_);
     connect(sliceSlider_, &QSlider::valueChanged, this, &ResultsViewerDialog::onSlicePositionChanged);
+
+    streamlinesCheckbox_ = new QCheckBox("Show streamlines", side);
+    sideLayout->addWidget(streamlinesCheckbox_);
+    connect(streamlinesCheckbox_, &QCheckBox::toggled, viewer_, &ResultsViewerWidget::setShowStreamlines);
+
+    arrowsCheckbox_ = new QCheckBox("Show velocity arrows", side);
+    sideLayout->addWidget(arrowsCheckbox_);
+    connect(arrowsCheckbox_, &QCheckBox::toggled, viewer_, &ResultsViewerWidget::setShowVelocityArrows);
 
     sideLayout->addStretch(1);
 

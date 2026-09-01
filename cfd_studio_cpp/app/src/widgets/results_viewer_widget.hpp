@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 
 #include <QMatrix4x4>
 #include <QOpenGLBuffer>
@@ -56,6 +57,17 @@ public:
     void setSliceAxis(Axis axis);
     void setSlicePosition(double t); // 0..1, normalized along the slice axis
 
+    // Streamlines: RK4-traced 3D lines through the velocity field, seeded
+    // from a grid on the inflow face (x=0) -- independent of the slice
+    // plane, so they convey the actual 3D flow regardless of which slice
+    // is shown. Velocity arrow glyphs: small 3D arrows sampled on the
+    // *current* slice plane's grid (so they stay visually tied to what's
+    // shown, rather than cluttering the whole volume). Both colored by
+    // local velocity magnitude, normalized independently of each other and
+    // of the slice's own field/range.
+    void setShowStreamlines(bool show);
+    void setShowVelocityArrows(bool show);
+
 signals:
     // Fired whenever the displayed slice's value range changes (new frame,
     // field, axis, or position) -- drives ColorLegendWidget's bar.
@@ -73,8 +85,17 @@ protected:
 private:
     void rebuildMeshGeometry();
     void rebuildSlice(); // re-extracts the CPU slice buffer, re-uploads the texture, recomputes the quad corners
+    void rebuildStreamlines();
+    void rebuildArrows();
     [[nodiscard]] QMatrix4x4 viewMatrix() const;
     [[nodiscard]] QMatrix4x4 projectionMatrix() const;
+    // Trilinear-interpolated velocity at a point in domain-space
+    // coordinates (same [0,Lx]x[0,Ly]x[0,Lz] frame as the slice quads).
+    [[nodiscard]] QVector3D sampleVelocity(double x, double y, double z) const;
+    [[nodiscard]] bool isSolidCell(int i, int j, int k) const;
+    // One streamline's worth of RK4-traced points, domain-space, starting
+    // at `start`; empty if it starts inside a solid cell.
+    [[nodiscard]] std::vector<QVector3D> traceStreamline(QVector3D start) const;
 
     Theme theme_ = theme_by_key(kDefaultThemeKey);
 
@@ -92,6 +113,23 @@ private:
     unsigned int sliceTexture_ = 0;
     bool sliceDirty_ = false;
     bool haveSlice_ = false;
+
+    // Shared position+color line shader/pipeline for both streamlines
+    // (drawn as one GL_LINE_STRIP run per line) and arrow glyphs (drawn as
+    // one GL_LINES call, 3 segments/6 vertices per arrow: shaft + 2 head
+    // legs) -- both are just colored line segments, no need for two
+    // shaders.
+    std::unique_ptr<QOpenGLShaderProgram> vectorProgram_;
+    QOpenGLBuffer streamlineVbo_{QOpenGLBuffer::VertexBuffer};
+    QOpenGLVertexArrayObject streamlineVao_;
+    std::vector<int> streamlineRunLengths_; // vertex count per streamline, for per-line glDrawArrays calls
+    bool showStreamlines_ = false;
+    bool streamlinesDirty_ = false;
+    QOpenGLBuffer arrowVbo_{QOpenGLBuffer::VertexBuffer};
+    QOpenGLVertexArrayObject arrowVao_;
+    int arrowVertexCount_ = 0;
+    bool showArrows_ = false;
+    bool arrowsDirty_ = false;
 
     std::shared_ptr<cfd::io::ResultsCacheReader> reader_;
     cfd::io::ResultsFrame currentFrame_;
