@@ -26,7 +26,7 @@ public slots:
 signals:
     void progressChanged(int step, double residual);
     void previewReady(Preview3DSnapshot snapshot);
-    void finished(QString foamPath, bool wasCached);
+    void finished(QString foamPath, bool wasCached, QString resultsCacheDir);
     void stopped();
     void errorOccurred(QString message);
 

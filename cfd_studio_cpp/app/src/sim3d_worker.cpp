@@ -23,7 +23,8 @@ void Sim3DWorker::run() {
         if (result.stopped) {
             emit stopped();
         } else {
-            emit finished(QString::fromStdString(result.foam_path), result.was_cached);
+            emit finished(QString::fromStdString(result.foam_path), result.was_cached,
+                          QString::fromStdString(result.results_cache_dir));
         }
     } catch (const std::exception& e) {
         emit errorOccurred(QString::fromUtf8(e.what()));

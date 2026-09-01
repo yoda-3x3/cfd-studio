@@ -1,6 +1,7 @@
 #include "tab_3d.hpp"
 
 #include <algorithm>
+#include <memory>
 #include <string>
 
 #include <QCheckBox>
@@ -22,9 +23,11 @@
 #include <QSpinBox>
 #include <QVBoxLayout>
 
+#include "io/results_cache_reader.hpp"
 #include "mesh/mesh.hpp"
 #include "orientation_dialog.hpp"
 #include "paraview_launcher.hpp"
+#include "results_viewer_dialog.hpp"
 #include "solvers/kernel_backend.hpp"
 #include "solvers/materials.hpp"
 #include "solvers/performance_presets_3d.hpp"
@@ -267,6 +270,12 @@ void ThreeDPanel::buildUi() {
     runForm->addRow(paraviewButton_);
     connect(paraviewButton_, &QPushButton::clicked, this, &ThreeDPanel::onOpenInParaView);
 
+    viewResultsButton_ = new QPushButton("View Results", runGroup);
+    viewResultsButton_->setObjectName("paraviewButton"); // same styling as the ParaView button
+    viewResultsButton_->setEnabled(false);
+    runForm->addRow(viewResultsButton_);
+    connect(viewResultsButton_, &QPushButton::clicked, this, &ThreeDPanel::onViewResults);
+
     leftLayout->addWidget(runGroup);
     leftLayout->addStretch();
 
@@ -433,6 +442,7 @@ void ThreeDPanel::onRunClicked() {
     xzVelocityPlot_->setHeatmapData({}, 0, 0);
     residualPlot_->clearLine();
     paraviewButton_->setEnabled(false);
+    viewResultsButton_->setEnabled(false);
 
     worker_ = new Sim3DWorker(*orientedMesh_, opts);
     thread_ = new QThread(this);
@@ -479,12 +489,14 @@ void ThreeDPanel::onPreview(Preview3DSnapshot snapshot) {
     xzVelocityPlot_->setObstacleMask(s.obstacle_xz);
 }
 
-void ThreeDPanel::onFinished(QString foamPath, bool wasCached) {
+void ThreeDPanel::onFinished(QString foamPath, bool wasCached, QString resultsCacheDir) {
     lastFoamPath_ = foamPath;
+    lastResultsCacheDir_ = resultsCacheDir;
     statusLabel_->setText(wasCached ? QString("Reused cached run: %1").arg(foamPath)
                                      : QString("Simulation complete: %1").arg(foamPath));
     setControlsEnabled(false);
     paraviewButton_->setEnabled(true);
+    viewResultsButton_->setEnabled(true);
     progressBar_->setValue(100);
 }
 
@@ -514,4 +526,18 @@ void ThreeDPanel::onOpenInParaView() {
     if (!paraview_launcher::launch(exe, lastFoamPath_)) {
         QMessageBox::warning(this, "Launch Failed", "Failed to launch ParaView.");
     }
+}
+
+void ThreeDPanel::onViewResults() {
+    if (lastResultsCacheDir_.isEmpty() || !orientedMesh_) return;
+    std::shared_ptr<cfd::io::ResultsCacheReader> reader;
+    try {
+        reader = std::make_shared<cfd::io::ResultsCacheReader>(lastResultsCacheDir_.toStdString());
+    } catch (const std::exception& e) {
+        QMessageBox::warning(this, "No Results Available",
+                              QString("Couldn't open the results cache for this run: %1").arg(e.what()));
+        return;
+    }
+    auto* dialog = new ResultsViewerDialog(*orientedMesh_, reader, currentTheme_, this);
+    dialog->show();
 }

@@ -45,10 +45,11 @@ private slots:
     void onStopClicked();
     void onProgress(int step, double residual);
     void onPreview(Preview3DSnapshot snapshot);
-    void onFinished(QString foamPath, bool wasCached);
+    void onFinished(QString foamPath, bool wasCached, QString resultsCacheDir);
     void onStopped();
     void onErrorOccurred(QString message);
     void onOpenInParaView();
+    void onViewResults();
 
 private:
     void buildUi();
@@ -95,6 +96,7 @@ private:
     QProgressBar* progressBar_ = nullptr;
     QLabel* statusLabel_ = nullptr;
     QPushButton* paraviewButton_ = nullptr;
+    QPushButton* viewResultsButton_ = nullptr;
 
     PlotWidget* xyVelocityPlot_ = nullptr;
     PlotWidget* xyPressurePlot_ = nullptr;
@@ -110,5 +112,6 @@ private:
     std::optional<cfd::mesh::Mesh> rawMesh_;
     std::optional<cfd::mesh::Mesh> orientedMesh_;
     QString lastFoamPath_;
+    QString lastResultsCacheDir_;
     QSettings settings_;
 };
