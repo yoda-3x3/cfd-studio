@@ -92,6 +92,13 @@ void ResultsViewerDialog::buildUi(const cfd::mesh::Mesh& mesh, const Theme& them
     sideLayout->addWidget(arrowsCheckbox_);
     connect(arrowsCheckbox_, &QCheckBox::toggled, viewer_, &ResultsViewerWidget::setShowVelocityArrows);
 
+    sideLayout->addWidget(new QLabel("Density:", side));
+    densitySlider_ = new QSlider(Qt::Horizontal, side);
+    densitySlider_->setRange(2, 30);
+    densitySlider_->setValue(8); // matches ResultsViewerWidget's own default density
+    sideLayout->addWidget(densitySlider_);
+    connect(densitySlider_, &QSlider::valueChanged, viewer_, &ResultsViewerWidget::setVectorDensity);
+
     sideLayout->addStretch(1);
 
     sideLayout->addWidget(new QLabel("Timestep:", side));

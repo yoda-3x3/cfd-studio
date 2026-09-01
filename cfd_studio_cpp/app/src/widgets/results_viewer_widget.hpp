@@ -68,6 +68,12 @@ public:
     void setShowStreamlines(bool show);
     void setShowVelocityArrows(bool show);
 
+    // Per-axis grid resolution for both overlays: streamlines seed from a
+    // density x density grid on the inflow face, arrows sample a
+    // density x density grid on the current slice. One shared control
+    // since both are "how many flow glyphs" from the user's point of view.
+    void setVectorDensity(int density);
+
 signals:
     // Fired whenever the displayed slice's value range changes (new frame,
     // field, axis, or position) -- drives ColorLegendWidget's bar.
@@ -130,6 +136,7 @@ private:
     int arrowVertexCount_ = 0;
     bool showArrows_ = false;
     bool arrowsDirty_ = false;
+    int vectorDensity_ = 8;
 
     std::shared_ptr<cfd::io::ResultsCacheReader> reader_;
     cfd::io::ResultsFrame currentFrame_;

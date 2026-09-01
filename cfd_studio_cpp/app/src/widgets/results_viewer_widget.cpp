@@ -256,6 +256,13 @@ void ResultsViewerWidget::setShowVelocityArrows(bool show) {
     update();
 }
 
+void ResultsViewerWidget::setVectorDensity(int density) {
+    vectorDensity_ = std::clamp(density, 2, 30);
+    streamlinesDirty_ = true;
+    arrowsDirty_ = true;
+    update();
+}
+
 void ResultsViewerWidget::rebuildMeshGeometry() {
     std::vector<float> vertexData;
     vertexData.reserve(mesh_.triangles.size() * 3 * 6);
@@ -478,7 +485,7 @@ void ResultsViewerWidget::rebuildStreamlines() {
     if (!haveFrame_ || !reader_ || !showStreamlines_) return;
 
     double Lx = reader_->nx() * reader_->dx(), Ly = reader_->ny() * reader_->dy(), Lz = reader_->nz() * reader_->dz();
-    constexpr int kSeedGrid = 6; // 6x6 seeds across the inflow face
+    int kSeedGrid = vectorDensity_; // density x density seeds across the inflow face
 
     std::vector<std::vector<QVector3D>> lines;
     for (int a = 0; a < kSeedGrid; ++a) {
@@ -539,8 +546,21 @@ void ResultsViewerWidget::rebuildArrows() {
     int nx = reader_->nx(), ny = reader_->ny(), nz = reader_->nz();
     double dx = reader_->dx(), dy = reader_->dy(), dz = reader_->dz();
     double Lx = nx * dx, Ly = ny * dy, Lz = nz * dz;
-    constexpr int kGrid = 10; // subsample the slice plane to a 10x10 arrow grid, regardless of solver resolution
-    float maxArrowLen = static_cast<float>(std::min({dx, dy, dz}) * (kGrid / 3.0));
+    int kGrid = vectorDensity_; // subsample the slice plane to a density x density arrow grid
+
+    // In-plane footprint the density x density grid spreads across depends
+    // on which two axes the current slice varies over -- e.g. an X slice's
+    // grid spans Y and Z, not X. Max arrow length is a fraction of the
+    // spacing *between adjacent samples* (not the solver's own cell size),
+    // so raising density automatically shrinks arrows to match the denser
+    // grid instead of making them overlap.
+    double footprintU = 0.0, footprintV = 0.0;
+    switch (axis_) {
+        case Axis::X: footprintU = Lz; footprintV = Ly; break;
+        case Axis::Y: footprintU = Lx; footprintV = Lz; break;
+        case Axis::Z: footprintU = Lx; footprintV = Ly; break;
+    }
+    float maxArrowLen = static_cast<float>(0.7 * std::min(footprintU, footprintV) / kGrid);
 
     struct Sample {
         QVector3D pos;
