@@ -10,6 +10,7 @@
 #include "io/openfoam_writer.hpp"
 #include "io/results_cache_writer.hpp"
 #include "io/run_cache.hpp"
+#include "mesh/stl_writer.hpp"
 #include "solvers/kernel_backend.hpp"
 #include "solvers/navier_stokes_3d.hpp"
 #include "solvers/voxelizer.hpp"
@@ -172,6 +173,13 @@ Run3DResult run_3d(const cfd::mesh::Mesh& mesh, const Run3DOptions& opts,
                                         solver.dz(), solid, &geo.mesh, opts.domain_mode, ground_effect_active);
     cfd::io::ResultsCacheWriter results_writer(
         opts.output_dir, opts.nx, opts.ny, opts.nz, solver.dx(), solver.dy(), solver.dz(), opts.domain_mode);
+    // geo.mesh (not the caller's original `mesh`) -- prepare_geometry's own
+    // scale+shift already puts it in the same [0,Lx]x[0,Ly]x[0,Lz] domain
+    // frame as the field data and OpenFoamCaseWriter's own object patch
+    // above; the in-app results viewer needs a mesh in that exact frame to
+    // render aligned with the slice data, not the pre-voxelization mesh in
+    // its own original coordinates.
+    cfd::mesh::write_stl(geo.mesh, (std::filesystem::path(results_writer.cache_dir()) / "mesh.stl").string());
 
     int frame_index = 0;
     auto write_step = [&]() {

@@ -25,6 +25,7 @@
 
 #include "io/results_cache_reader.hpp"
 #include "mesh/mesh.hpp"
+#include "mesh/stl_reader.hpp"
 #include "orientation_dialog.hpp"
 #include "paraview_launcher.hpp"
 #include "results_viewer_dialog.hpp"
@@ -529,15 +530,22 @@ void ThreeDPanel::onOpenInParaView() {
 }
 
 void ThreeDPanel::onViewResults() {
-    if (lastResultsCacheDir_.isEmpty() || !orientedMesh_) return;
+    if (lastResultsCacheDir_.isEmpty()) return;
     std::shared_ptr<cfd::io::ResultsCacheReader> reader;
+    cfd::mesh::Mesh domainMesh;
     try {
         reader = std::make_shared<cfd::io::ResultsCacheReader>(lastResultsCacheDir_.toStdString());
+        // Not orientedMesh_ -- that's the pre-voxelization mesh in its own
+        // original coordinates. run_3d wrote the actual prepare_geometry'd
+        // mesh (scaled + shifted into the same [0,Lx]x[0,Ly]x[0,Lz] domain
+        // frame as the cached field data) to mesh.stl alongside it, so the
+        // viewer's mesh and slice plane land in the same place.
+        domainMesh = cfd::mesh::read_stl((lastResultsCacheDir_ + "/mesh.stl").toStdString());
     } catch (const std::exception& e) {
         QMessageBox::warning(this, "No Results Available",
                               QString("Couldn't open the results cache for this run: %1").arg(e.what()));
         return;
     }
-    auto* dialog = new ResultsViewerDialog(*orientedMesh_, reader, currentTheme_, this);
+    auto* dialog = new ResultsViewerDialog(domainMesh, reader, currentTheme_, this);
     dialog->show();
 }
