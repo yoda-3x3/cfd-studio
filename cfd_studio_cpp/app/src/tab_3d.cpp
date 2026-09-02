@@ -17,9 +17,11 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QFrame>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QRadioButton>
+#include <QScrollArea>
 #include <QSpinBox>
 #include <QVBoxLayout>
 
@@ -33,6 +35,7 @@
 #include "solvers/materials.hpp"
 #include "solvers/performance_presets_3d.hpp"
 #include "widgets/plot_widget.hpp"
+#include "widgets/wrapped_label.hpp"
 
 ThreeDPanel::ThreeDPanel(QWidget* parent) : QWidget(parent), settings_("VenturiCFD", "VenturiCFD") {
     buildUi();
@@ -57,8 +60,24 @@ void ThreeDPanel::shutdown() {
 void ThreeDPanel::buildUi() {
     auto* root = new QHBoxLayout(this);
 
-    auto* leftPanel = new QWidget(this);
-    leftPanel->setFixedWidth(320);
+    // The left panel packs 3 group boxes' worth of controls into a fixed
+    // width; on a window shorter than its natural height that used to just
+    // squeeze/clip everything with no way to reach the rest. Scrolling it
+    // instead keeps every control at a legible, unsquashed size.
+    auto* leftScroll = new QScrollArea(this);
+    leftScroll->setWidgetResizable(true);
+    leftScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    leftScroll->setFrameShape(QFrame::NoFrame);
+    // A *minimum*, not a fixed width: at larger UiScale settings, labels
+    // like "Reynolds number:" need more horizontal room than a hardcoded
+    // 320px allows -- a fixed width just clipped the text. Left unbounded
+    // above the minimum, the scroll area takes leftPanel's own sizeHint
+    // width (QHBoxLayout gives it exactly that, since only rightPanel below
+    // has a stretch factor), which grows with the font automatically.
+    leftScroll->setMinimumWidth(320);
+
+    auto* leftPanel = new QWidget(leftScroll);
+    leftPanel->setMinimumWidth(300);
     auto* leftLayout = new QVBoxLayout(leftPanel);
 
     // ---- Geometry group ----
@@ -83,9 +102,8 @@ void ThreeDPanel::buildUi() {
     connect(uploadButton_, &QPushButton::clicked, this, &ThreeDPanel::onBrowseMeshFile);
     connect(reorientButton_, &QPushButton::clicked, this, &ThreeDPanel::onReopenOrientationDialog);
 
-    meshInfoLabel_ = new QLabel("No mesh loaded.", geoGroup);
+    meshInfoLabel_ = new WrappedLabel("No mesh loaded.", geoGroup);
     meshInfoLabel_->setObjectName("description");
-    meshInfoLabel_->setWordWrap(true);
     geoLayout->addWidget(meshInfoLabel_);
 
     auto* gapForm = new QFormLayout();
@@ -128,9 +146,8 @@ void ThreeDPanel::buildUi() {
     caseForm->addRow("Performance preset:", perfPresetCombo_);
     connect(perfPresetCombo_, &QComboBox::currentIndexChanged, this, &ThreeDPanel::onPerformancePresetChanged);
 
-    perfPresetInfoLabel_ = new QLabel(caseGroup);
+    perfPresetInfoLabel_ = new WrappedLabel(caseGroup);
     perfPresetInfoLabel_->setObjectName("description");
-    perfPresetInfoLabel_->setWordWrap(true);
     caseForm->addRow(perfPresetInfoLabel_);
 
     auto* gridRow = new QWidget(caseGroup);
@@ -204,14 +221,13 @@ void ThreeDPanel::buildUi() {
     threadsSpin_->setValue(std::min(8, maxThreads));
     caseForm->addRow(QString("CPU threads (max %1):").arg(maxThreads), threadsSpin_);
 
-    auto* threadsNote = new QLabel(
+    auto* threadsNote = new WrappedLabel(
         "The pressure solve is parallelized across cores, but this kind of "
         "stencil computation is memory-bandwidth-bound: expect a real but "
         "modest speedup (often best around 4-8 threads) rather than linear "
         "scaling to every core.",
         caseGroup);
     threadsNote->setObjectName("description");
-    threadsNote->setWordWrap(true);
     caseForm->addRow(threadsNote);
 
     leftLayout->addWidget(caseGroup);
@@ -261,8 +277,7 @@ void ThreeDPanel::buildUi() {
     progressBar_->setRange(0, 100);
     runForm->addRow(progressBar_);
 
-    statusLabel_ = new QLabel("Idle.", runGroup);
-    statusLabel_->setWordWrap(true);
+    statusLabel_ = new WrappedLabel("Idle.", runGroup);
     runForm->addRow(statusLabel_);
 
     paraviewButton_ = new QPushButton("Open Latest Result in ParaView", runGroup);
@@ -296,7 +311,8 @@ void ThreeDPanel::buildUi() {
     rightGrid->addLayout(row1);
     rightGrid->addLayout(row2);
 
-    root->addWidget(leftPanel);
+    leftScroll->setWidget(leftPanel);
+    root->addWidget(leftScroll);
     root->addWidget(rightPanel, 1);
 
     onPerformancePresetChanged();

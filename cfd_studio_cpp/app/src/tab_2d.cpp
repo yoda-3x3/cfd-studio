@@ -11,10 +11,12 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QFrame>
 #include <QMap>
 #include <QMessageBox>
 #include <QProgressBar>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QSpinBox>
 #include <QVBoxLayout>
 
@@ -23,6 +25,7 @@
 #include "paraview_launcher.hpp"
 #include "solvers/scenario_presets_2d.hpp"
 #include "widgets/plot_widget.hpp"
+#include "widgets/wrapped_label.hpp"
 
 namespace {
 struct ScenarioUiInfo {
@@ -66,8 +69,24 @@ void TwoDPanel::buildUi() {
     auto* root = new QHBoxLayout(this);
 
     // ---- Left panel ----
-    auto* leftPanel = new QWidget(this);
-    leftPanel->setFixedWidth(320);
+    // Scrolled rather than a plain fixed-width widget so a window shorter
+    // than the panel's natural content height scrolls instead of
+    // squeezing every control down to an illegible size (same fix as
+    // ThreeDPanel's left panel).
+    auto* leftScroll = new QScrollArea(this);
+    leftScroll->setWidgetResizable(true);
+    leftScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    leftScroll->setFrameShape(QFrame::NoFrame);
+    // A *minimum*, not a fixed width: at larger UiScale settings, labels
+    // like "Reynolds number:" need more horizontal room than a hardcoded
+    // 320px allows -- a fixed width just clipped the text. Left unbounded
+    // above the minimum, the scroll area takes leftPanel's own sizeHint
+    // width (QHBoxLayout gives it exactly that, since only rightPanel below
+    // has a stretch factor), which grows with the font automatically.
+    leftScroll->setMinimumWidth(320);
+
+    auto* leftPanel = new QWidget(leftScroll);
+    leftPanel->setMinimumWidth(300);
     auto* leftLayout = new QVBoxLayout(leftPanel);
 
     auto* caseGroup = new QGroupBox("Case Setup", leftPanel);
@@ -80,9 +99,8 @@ void TwoDPanel::buildUi() {
     }
     caseForm->addRow("Scenario:", scenarioCombo_);
 
-    descriptionLabel_ = new QLabel(caseGroup);
+    descriptionLabel_ = new WrappedLabel(caseGroup);
     descriptionLabel_->setObjectName("description");
-    descriptionLabel_->setWordWrap(true);
     caseForm->addRow(descriptionLabel_);
 
     auto* gridRow = new QWidget(caseGroup);
@@ -187,7 +205,8 @@ void TwoDPanel::buildUi() {
     rightLayout->addWidget(fieldPlot_, 2);
     rightLayout->addWidget(residualPlot_, 1);
 
-    root->addWidget(leftPanel);
+    leftScroll->setWidget(leftPanel);
+    root->addWidget(leftScroll);
     root->addWidget(rightPanel, 1);
 
     onScenarioChanged();

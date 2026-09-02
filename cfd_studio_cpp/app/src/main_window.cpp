@@ -36,6 +36,8 @@ MainWindow::MainWindow(QWidget* parent)
     // since they were constructed afterward and stayed on their
     // default-constructed (dark_blue) plot colors regardless of the
     // persisted theme.
+    currentUiScale_ = ui_scale_by_key(settings_.value("uiScale", ui_scale_key(kDefaultUiScale)).toString());
+    dyslexiaFont_ = settings_.value("dyslexiaFont", false).toBool();
     applyTheme(settings_.value("theme", kDefaultThemeKey).toString());
     buildMenus();
 
@@ -63,6 +65,28 @@ void MainWindow::buildMenus() {
         connect(action, &QAction::triggered, this, [this, key]() { applyTheme(key); });
     }
 
+    // "Button Size" scales the whole UI (fonts, padding, tabs), not just
+    // QPushButton -- named after what the user asked for, but bumping
+    // buttons alone while every label/input stayed tiny wouldn't actually
+    // fix a cramped-looking window.
+    auto* sizeMenu = menuBar()->addMenu("&Button Size");
+    auto* sizeGroup = new QActionGroup(this);
+    sizeGroup->setExclusive(true);
+    for (UiScale scale : ui_scales()) {
+        auto* action = sizeMenu->addAction(ui_scale_label(scale));
+        action->setCheckable(true);
+        action->setChecked(scale == currentUiScale_);
+        sizeGroup->addAction(action);
+        connect(action, &QAction::triggered, this, [this, scale]() { applyUiScale(scale); });
+    }
+
+    auto* dyslexiaAction = settingsMenu->addAction("Dyslexia-Friendly Font");
+    dyslexiaAction->setCheckable(true);
+    dyslexiaAction->setChecked(dyslexiaFont_);
+    dyslexiaAction->setToolTip(
+        "Uses OpenDyslexic if it's installed on this system, otherwise falls back to Comic Sans MS.");
+    connect(dyslexiaAction, &QAction::toggled, this, &MainWindow::applyDyslexiaFont);
+
     auto* helpMenu = menuBar()->addMenu("&Help");
     auto* aboutAction = helpMenu->addAction("About");
     connect(aboutAction, &QAction::triggered, this, &MainWindow::showAbout);
@@ -70,11 +94,27 @@ void MainWindow::buildMenus() {
 
 void MainWindow::applyTheme(const QString& key) {
     const Theme& theme = theme_by_key(key);
-    setStyleSheet(build_stylesheet(theme));
     currentThemeKey_ = theme.key;
     settings_.setValue("theme", theme.key);
+    applyStylesheet();
     if (twoDPanel_) twoDPanel_->setTheme(theme);
     if (threeDPanel_) threeDPanel_->setTheme(theme);
+}
+
+void MainWindow::applyUiScale(UiScale scale) {
+    currentUiScale_ = scale;
+    settings_.setValue("uiScale", ui_scale_key(scale));
+    applyStylesheet();
+}
+
+void MainWindow::applyDyslexiaFont(bool enabled) {
+    dyslexiaFont_ = enabled;
+    settings_.setValue("dyslexiaFont", enabled);
+    applyStylesheet();
+}
+
+void MainWindow::applyStylesheet() {
+    setStyleSheet(build_stylesheet(theme_by_key(currentThemeKey_), currentUiScale_, dyslexiaFont_));
 }
 
 void MainWindow::showAbout() {

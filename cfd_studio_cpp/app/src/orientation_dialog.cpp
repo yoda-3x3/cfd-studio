@@ -9,6 +9,8 @@
 #include <QRadioButton>
 #include <QVBoxLayout>
 
+#include "widgets/wrapped_label.hpp"
+
 OrientationDialog::OrientationDialog(const cfd::mesh::Mesh& mesh, const QString& meshName, const Theme& theme,
                                       QWidget* parent)
     : QDialog(parent), mesh_(mesh), meshName_(meshName), theme_(theme) {
@@ -51,11 +53,10 @@ void OrientationDialog::buildUi() {
     autoPanel_ = new QWidget(side);
     auto* autoLayout = new QVBoxLayout(autoPanel_);
     autoLayout->setContentsMargins(0, 0, 0, 0);
-    auto* disclaimer = new QLabel(
+    auto* disclaimer = new WrappedLabel(
         "Suggested orientations are based on a simple geometric heuristic (smallest projected frontal area). "
         "Verify before running.",
         autoPanel_);
-    disclaimer->setWordWrap(true);
     disclaimer->setObjectName("description");
     autoLayout->addWidget(disclaimer);
 
@@ -73,9 +74,8 @@ void OrientationDialog::buildUi() {
         if (checked) onCandidateSelected(id);
     });
 
-    warningLabel_ = new QLabel(autoPanel_);
+    warningLabel_ = new WrappedLabel(autoPanel_);
     warningLabel_->setStyleSheet(QString("color: %1;").arg(theme_.danger));
-    warningLabel_->setWordWrap(true);
     autoLayout->addWidget(warningLabel_);
     if (candidates_[0].projected_area > 0.0 &&
         candidates_[1].projected_area / candidates_[0].projected_area < 1.15) {
@@ -87,11 +87,10 @@ void OrientationDialog::buildUi() {
     pickPanel_ = new QWidget(side);
     auto* pickLayout = new QVBoxLayout(pickPanel_);
     pickLayout->setContentsMargins(0, 0, 0, 0);
-    auto* pickDisclaimer = new QLabel(
+    auto* pickDisclaimer = new WrappedLabel(
         "Click a point on the mesh's leading edge (e.g. the nose or front tip) — flow direction is derived "
         "from that point toward the mesh's center.",
         pickPanel_);
-    pickDisclaimer->setWordWrap(true);
     pickDisclaimer->setObjectName("description");
     pickLayout->addWidget(pickDisclaimer);
     pickStatusLabel_ = new QLabel("No point picked yet.", pickPanel_);

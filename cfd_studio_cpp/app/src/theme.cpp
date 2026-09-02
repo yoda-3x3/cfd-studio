@@ -51,8 +51,70 @@ const Theme& theme_by_key(const QString& key) {
     return themes().front();
 }
 
-QString build_stylesheet(const Theme& t) {
-    return QString(
+QString ui_scale_key(UiScale scale) {
+    switch (scale) {
+        case UiScale::Small: return "small";
+        case UiScale::Large: return "large";
+        case UiScale::Medium: default: return "medium";
+    }
+}
+
+QString ui_scale_label(UiScale scale) {
+    switch (scale) {
+        case UiScale::Small: return "Small";
+        case UiScale::Large: return "Large";
+        case UiScale::Medium: default: return "Medium";
+    }
+}
+
+UiScale ui_scale_by_key(const QString& key) {
+    if (key == "small") return UiScale::Small;
+    if (key == "large") return UiScale::Large;
+    return kDefaultUiScale;
+}
+
+const std::array<UiScale, 3>& ui_scales() {
+    static const std::array<UiScale, 3> all = {UiScale::Small, UiScale::Medium, UiScale::Large};
+    return all;
+}
+
+namespace {
+// Font size / padding metrics per UiScale -- kept as plain string literals
+// (not computed) so each tier's numbers are easy to eyeball and tweak.
+struct ScaleMetrics {
+    const char* base_font_pt;
+    const char* button_padding;
+    const char* input_padding;
+    const char* tab_padding;
+};
+
+ScaleMetrics scale_metrics(UiScale scale) {
+    switch (scale) {
+        case UiScale::Small: return {"8.5pt", "5px 10px", "2px", "5px 10px"};
+        case UiScale::Large: return {"14pt", "14px 26px", "7px", "14px 24px"};
+        case UiScale::Medium:
+        default: return {"10.5pt", "7px 14px", "3px", "8px 16px"};
+    }
+}
+} // namespace
+
+QString build_stylesheet(const Theme& t, UiScale scale, bool dyslexia_font) {
+    ScaleMetrics m = scale_metrics(scale);
+
+    QString fontFamilyRule;
+    if (dyslexia_font) {
+        // Neither font is bundled with the app: OpenDyslexic only takes
+        // effect if the user has separately installed it (a specialized
+        // dyslexia-readability font, so not something to silently force on
+        // everyone via a bundled resource); Comic Sans MS ships with
+        // Windows and is a commonly-cited free fallback with the same
+        // "distinguishable letterforms" property. Falls through to the
+        // platform default font if neither is present.
+        fontFamilyRule = "QWidget { font-family: \"OpenDyslexic\", \"Comic Sans MS\", sans-serif; }\n";
+    }
+
+    return (fontFamilyRule + QString(
+               "QWidget { font-size: %14; }\n"
                "QMainWindow, QWidget { background: %1; color: %2; }\n"
                "QGroupBox {\n"
                "    font-weight: 600;\n"
@@ -75,7 +137,7 @@ QString build_stylesheet(const Theme& t) {
                "    background: %6;\n"
                "    color: %7;\n"
                "    border-radius: 6px;\n"
-               "    padding: 7px 14px;\n"
+               "    padding: %15;\n"
                "    font-weight: 600;\n"
                "    border: none;\n"
                "}\n"
@@ -85,6 +147,20 @@ QString build_stylesheet(const Theme& t) {
                "QPushButton#stopButton:hover { background: %10; }\n"
                "QPushButton#paraviewButton { background: %11; }\n"
                "QPushButton#paraviewButton:hover { background: %12; }\n"
+               // Without these, the #id background rules above (higher
+               // specificity than the plain ":disabled" rule) kept the
+               // full-saturation red/green background on a disabled
+               // stop/paraview button while still picking up ":disabled"'s
+               // muted-gray text color for want of any more-specific color
+               // rule -- muted gray on saturated green/red read as low
+               // contrast, close to illegible. Falling back to the same
+               // neutral disabled look as every other button fixes that
+               // and also reads as "disabled" more clearly than a
+               // still-vivid button did.
+               "QPushButton#stopButton:disabled, QPushButton#paraviewButton:disabled {\n"
+               "    background: %3;\n"
+               "    color: %5;\n"
+               "}\n"
                "QProgressBar {\n"
                "    border: 1px solid %3;\n"
                "    border-radius: 6px;\n"
@@ -100,7 +176,7 @@ QString build_stylesheet(const Theme& t) {
                "    color: %2;\n"
                "    border: 1px solid %3;\n"
                "    border-radius: 4px;\n"
-               "    padding: 3px;\n"
+               "    padding: %16;\n"
                "    selection-background-color: %6;\n"
                "}\n"
                "QComboBox QAbstractItemView {\n"
@@ -115,7 +191,7 @@ QString build_stylesheet(const Theme& t) {
                "QTabBar::tab {\n"
                "    background: %4;\n"
                "    color: %2;\n"
-               "    padding: 8px 16px;\n"
+               "    padding: %17;\n"
                "    border: 1px solid %3;\n"
                "    border-bottom: none;\n"
                "}\n"
@@ -141,5 +217,9 @@ QString build_stylesheet(const Theme& t) {
         .arg(t.danger_hover)// %10
         .arg(t.success)     // %11
         .arg(t.success_hover) // %12
-        .arg(t.input_bg);   // %13
+        .arg(t.input_bg)    // %13
+        .arg(m.base_font_pt)    // %14
+        .arg(m.button_padding)  // %15
+        .arg(m.input_padding)   // %16
+        .arg(m.tab_padding));   // %17
 }

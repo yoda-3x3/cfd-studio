@@ -39,6 +39,26 @@ inline constexpr const char* kDefaultThemeKey = "dark_blue";
 // used to resolve a QSettings-persisted key that could be stale/corrupt.
 [[nodiscard]] const Theme& theme_by_key(const QString& key);
 
+// Overall widget scale -- covers font size, button/input padding, and
+// group box spacing together (not just QPushButton) since bumping button
+// size alone while labels/inputs stay tiny doesn't actually fix a cramped
+// layout.
+enum class UiScale { Small, Medium, Large };
+inline constexpr UiScale kDefaultUiScale = UiScale::Medium;
+
+[[nodiscard]] QString ui_scale_key(UiScale scale);
+[[nodiscard]] QString ui_scale_label(UiScale scale);
+// Falls back to kDefaultUiScale for an unrecognized key, same lenient
+// contract as theme_by_key.
+[[nodiscard]] UiScale ui_scale_by_key(const QString& key);
+[[nodiscard]] const std::array<UiScale, 3>& ui_scales();
+
 // Port of ui/theme.py's build_stylesheet -- QSS syntax is unchanged
 // between PySide6 and Qt6/C++, so every selector transfers directly.
-[[nodiscard]] QString build_stylesheet(const Theme& theme);
+// `scale` and `dyslexia_font` are new (no Python equivalent): `scale`
+// drives a font-size/padding multiplier across the whole stylesheet,
+// and `dyslexia_font` prepends a font-family override (OpenDyslexic if
+// installed, else Comic Sans MS's more distinguishable letterforms as a
+// widely-available fallback -- both left out of the default stylesheet
+// since neither is a great general-purpose UI font).
+[[nodiscard]] QString build_stylesheet(const Theme& theme, UiScale scale = kDefaultUiScale, bool dyslexia_font = false);
