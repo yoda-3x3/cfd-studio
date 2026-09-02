@@ -459,21 +459,35 @@ std::vector<QVector3D> ResultsViewerWidget::traceStreamline(QVector3D start) con
         if (isSolidCell(i, j, k)) break;
         pts.push_back(p);
 
-        // Classic RK4 stages, but the final combined vector is normalized
-        // and used as a fixed-length step (not vel*dt) -- keeps step count
-        // bounded regardless of local speed (near-stagnant recirculation
-        // zones would otherwise take forever to advance), while RK4's
-        // multi-sample blending still captures curvature better than a
-        // single Euler sample per step.
-        QVector3D k1 = sampleVelocity(p.x(), p.y(), p.z());
+        // Classic RK4 stages for an arc-length-parameterized curve: each
+        // stage direction is normalized to a unit vector *before* being
+        // used to place the next sample point, so every sample offset is
+        // exactly h/2 or h regardless of local speed. (An earlier version
+        // used the raw, un-normalized velocity for those offsets, which is
+        // dimensionally a length*speed, not a length -- at typical solver
+        // velocity magnitudes that put p2/p3/p4 many step-lengths away from
+        // p, so RK4's curvature-sampling benefit was lost and traces came
+        // out visibly straighter than the actual flow.) The final blended
+        // direction is likewise a step of fixed length h -- keeps step
+        // count bounded regardless of local speed (near-stagnant
+        // recirculation zones would otherwise take forever to advance).
+        QVector3D v1 = sampleVelocity(p.x(), p.y(), p.z());
+        if (v1.length() < kMinSpeed) break;
+        QVector3D k1 = v1.normalized();
         QVector3D p2 = p + k1 * (h * 0.5f);
-        QVector3D k2 = sampleVelocity(p2.x(), p2.y(), p2.z());
+        QVector3D v2 = sampleVelocity(p2.x(), p2.y(), p2.z());
+        if (v2.length() < kMinSpeed) break;
+        QVector3D k2 = v2.normalized();
         QVector3D p3 = p + k2 * (h * 0.5f);
-        QVector3D k3 = sampleVelocity(p3.x(), p3.y(), p3.z());
+        QVector3D v3 = sampleVelocity(p3.x(), p3.y(), p3.z());
+        if (v3.length() < kMinSpeed) break;
+        QVector3D k3 = v3.normalized();
         QVector3D p4 = p + k3 * h;
-        QVector3D k4 = sampleVelocity(p4.x(), p4.y(), p4.z());
+        QVector3D v4 = sampleVelocity(p4.x(), p4.y(), p4.z());
+        if (v4.length() < kMinSpeed) break;
+        QVector3D k4 = v4.normalized();
         QVector3D blended = (k1 + k2 * 2.0f + k3 * 2.0f + k4) * (1.0f / 6.0f);
-        if (blended.length() < kMinSpeed) break;
+        if (blended.length() < kMinSpeed) break; // near-cancelling directions -- a singular point in the direction field
         p = p + blended.normalized() * h;
     }
     return pts;
@@ -487,11 +501,29 @@ void ResultsViewerWidget::rebuildStreamlines() {
     double Lx = reader_->nx() * reader_->dx(), Ly = reader_->ny() * reader_->dy(), Lz = reader_->nz() * reader_->dz();
     int kSeedGrid = vectorDensity_; // density x density seeds across the inflow face
 
+    // Bias the seed grid toward the object's own cross-section (plus a
+    // margin) rather than spreading it uniformly across the whole inflow
+    // face: in a typical external-flow domain the object is a small
+    // fraction of that face, so uniform seeding mostly produced lines that
+    // never passed close enough to the object to visibly deflect.
+    double yLo = 0.0, yHi = Ly, zLo = 0.0, zHi = Lz;
+    if (haveMesh_) {
+        auto b = mesh_.bounds();
+        double marginY = std::max(0.15 * (b.max.y - b.min.y), 0.05 * Ly);
+        double marginZ = std::max(0.15 * (b.max.z - b.min.z), 0.05 * Lz);
+        double loY = std::clamp(b.min.y - marginY, 0.0, Ly);
+        double hiY = std::clamp(b.max.y + marginY, 0.0, Ly);
+        double loZ = std::clamp(b.min.z - marginZ, 0.0, Lz);
+        double hiZ = std::clamp(b.max.z + marginZ, 0.0, Lz);
+        if (hiY > loY) { yLo = loY; yHi = hiY; }
+        if (hiZ > loZ) { zLo = loZ; zHi = hiZ; }
+    }
+
     std::vector<std::vector<QVector3D>> lines;
     for (int a = 0; a < kSeedGrid; ++a) {
         for (int b = 0; b < kSeedGrid; ++b) {
-            float y = static_cast<float>((a + 0.5) / kSeedGrid * Ly);
-            float z = static_cast<float>((b + 0.5) / kSeedGrid * Lz);
+            float y = static_cast<float>(yLo + (a + 0.5) / kSeedGrid * (yHi - yLo));
+            float z = static_cast<float>(zLo + (b + 0.5) / kSeedGrid * (zHi - zLo));
             QVector3D seed(static_cast<float>(0.02 * Lx), y, z);
             int i = static_cast<int>(seed.x() / reader_->dx());
             int j = static_cast<int>(seed.y() / reader_->dy());
