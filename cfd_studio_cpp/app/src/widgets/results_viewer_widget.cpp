@@ -14,16 +14,23 @@
 namespace {
 constexpr float kDegToRad = 3.14159265358979323846f / 180.0f;
 
-// Reused verbatim from MeshPreviewWidget -- same lit single-directional-
-// light shader for the object surface.
+// Unlike MeshPreviewWidget's identical-looking shader (a separate copy in
+// mesh_preview_widget.cpp, which has no field data to show), this version
+// takes a per-vertex color -- the object surface is shaded by the current
+// scalar field sampled just off the wall (see rebuildMeshGeometry), not a
+// single flat theme color, to match how CFD surface renders typically
+// look (a colored, lit body, not a solid-tint one).
 const char* kMeshVertexShader = R"(
 #version 330 core
 layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec3 aNormal;
+layout(location = 2) in vec3 aColor;
 uniform mat4 uMvp;
 out vec3 vNormal;
+out vec3 vColor;
 void main() {
     vNormal = aNormal;
+    vColor = aColor;
     gl_Position = uMvp * vec4(aPos, 1.0);
 }
 )";
@@ -31,13 +38,13 @@ void main() {
 const char* kMeshFragmentShader = R"(
 #version 330 core
 in vec3 vNormal;
+in vec3 vColor;
 uniform vec3 uLightDir;
-uniform vec3 uColor;
 out vec4 fragColor;
 void main() {
     vec3 n = normalize(vNormal);
     float diff = max(dot(n, normalize(-uLightDir)), 0.0);
-    vec3 color = uColor * (0.35 + 0.65 * diff);
+    vec3 color = vColor * (0.35 + 0.65 * diff);
     fragColor = vec4(color, 1.0);
 }
 )";
@@ -218,6 +225,7 @@ void ResultsViewerWidget::setFrame(int index) {
     }
     frameIndex_ = index;
     haveFrame_ = true;
+    meshDirty_ = true; // surface color samples the current field/frame
     sliceDirty_ = true;
     streamlinesDirty_ = true; // velocity field changed
     arrowsDirty_ = true;
@@ -226,6 +234,7 @@ void ResultsViewerWidget::setFrame(int index) {
 
 void ResultsViewerWidget::setScalarField(ScalarField field) {
     field_ = field;
+    meshDirty_ = true; // surface color samples the current field
     sliceDirty_ = true;
     update();
 }
@@ -264,32 +273,69 @@ void ResultsViewerWidget::setVectorDensity(int density) {
 }
 
 void ResultsViewerWidget::rebuildMeshGeometry() {
-    std::vector<float> vertexData;
-    vertexData.reserve(mesh_.triangles.size() * 3 * 6);
+    // Surface color comes from the active scalar field sampled a couple of
+    // cells off the wall along the face normal, not right on it: a no-slip
+    // wall has ~zero velocity exactly at the surface, so sampling in place
+    // would paint the whole body a single flat color for any velocity
+    // field. Offsetting into the adjacent fluid captures the actual
+    // near-wall variation (e.g. the visible over-the-body speedup CFD
+    // renders typically show).
+    bool haveField = haveFrame_ && reader_;
+    const std::vector<double>* field = haveField ? &fieldArray(field_) : nullptr;
+    float offset = haveField
+        ? static_cast<float>(2.0 * std::min({reader_->dx(), reader_->dy(), reader_->dz()}))
+        : 0.0f;
+
+    struct VertexScratch {
+        cfd::mesh::Vec3 pos;
+        cfd::mesh::Vec3 normal;
+        float value;
+    };
+    std::vector<VertexScratch> verts;
+    verts.reserve(mesh_.triangles.size() * 3);
+
+    float vmin = std::numeric_limits<float>::infinity(), vmax = -std::numeric_limits<float>::infinity();
     for (const auto& tri : mesh_.triangles) {
         const auto& a = mesh_.vertices[tri[0]];
         const auto& b = mesh_.vertices[tri[1]];
         const auto& c = mesh_.vertices[tri[2]];
         cfd::mesh::Vec3 normal = cfd::mesh::normalize(cfd::mesh::cross(b - a, c - a));
         for (const cfd::mesh::Vec3* v : {&a, &b, &c}) {
-            vertexData.push_back(static_cast<float>(v->x));
-            vertexData.push_back(static_cast<float>(v->y));
-            vertexData.push_back(static_cast<float>(v->z));
-            vertexData.push_back(static_cast<float>(normal.x));
-            vertexData.push_back(static_cast<float>(normal.y));
-            vertexData.push_back(static_cast<float>(normal.z));
+            float value = 0.0f;
+            if (field) {
+                value = static_cast<float>(sampleScalar(*field, v->x + normal.x * offset, v->y + normal.y * offset,
+                                                          v->z + normal.z * offset));
+                vmin = std::min(vmin, value);
+                vmax = std::max(vmax, value);
+            }
+            verts.push_back({*v, normal, value});
         }
     }
-    meshVertexCount_ = static_cast<int>(mesh_.triangles.size() * 3);
+    float range = (vmax > vmin) ? (vmax - vmin) : 1.0f;
+    QColor fallback(theme_.accent); // shown before any results frame is loaded
+
+    std::vector<float> vertexData;
+    vertexData.reserve(verts.size() * 9);
+    for (const auto& vs : verts) {
+        QColor c = field ? flow_colormap_sample((vs.value - vmin) / range) : fallback;
+        vertexData.insert(vertexData.end(), {static_cast<float>(vs.pos.x), static_cast<float>(vs.pos.y),
+                                              static_cast<float>(vs.pos.z), static_cast<float>(vs.normal.x),
+                                              static_cast<float>(vs.normal.y), static_cast<float>(vs.normal.z),
+                                              static_cast<float>(c.redF()), static_cast<float>(c.greenF()),
+                                              static_cast<float>(c.blueF())});
+    }
+    meshVertexCount_ = static_cast<int>(verts.size());
 
     meshVao_.bind();
     if (!meshVbo_.isCreated()) meshVbo_.create();
     meshVbo_.bind();
     meshVbo_.allocate(vertexData.data(), static_cast<int>(vertexData.size() * sizeof(float)));
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), reinterpret_cast<void*>(0));
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), reinterpret_cast<void*>(0));
     glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), reinterpret_cast<void*>(3 * sizeof(float)));
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), reinterpret_cast<void*>(3 * sizeof(float)));
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), reinterpret_cast<void*>(6 * sizeof(float)));
     meshVbo_.release();
     meshVao_.release();
 
@@ -303,14 +349,7 @@ void ResultsViewerWidget::rebuildSlice() {
     int nx = reader_->nx(), ny = reader_->ny(), nz = reader_->nz();
     double Lx = nx * reader_->dx(), Ly = ny * reader_->dy(), Lz = nz * reader_->dz();
 
-    const std::vector<double>* field = nullptr;
-    switch (field_) {
-        case ScalarField::VelocityMagnitude: field = &currentFrame_.velocity_magnitude; break;
-        case ScalarField::Pressure: field = &currentFrame_.pressure; break;
-        case ScalarField::VelocityU: field = &currentFrame_.velocity_u; break;
-        case ScalarField::VelocityV: field = &currentFrame_.velocity_v; break;
-        case ScalarField::VelocityW: field = &currentFrame_.velocity_w; break;
-    }
+    const std::vector<double>& field = fieldArray(field_);
 
     // i-slowest/k-fastest, same convention as Fields3D everywhere else
     // (core/grid_index.hpp's idx3, unpadded variant -- see
@@ -340,7 +379,7 @@ void ResultsViewerWidget::rebuildSlice() {
     if (axis_ == Axis::X) {
         int i = std::clamp(static_cast<int>(std::lround(slicePosition_ * (nx - 1))), 0, nx - 1);
         double x = i * reader_->dx();
-        extract(nz, ny, [&](int k, int j) { return (*field)[idx(i, j, k)]; }); // u<->k(nz), v<->j(ny)
+        extract(nz, ny, [&](int k, int j) { return field[idx(i, j, k)]; }); // u<->k(nz), v<->j(ny)
         corners = {
             static_cast<float>(x), 0.0f, 0.0f, 0.0f, 0.0f,
             static_cast<float>(x), 0.0f, static_cast<float>(Lz), 1.0f, 0.0f,
@@ -350,7 +389,7 @@ void ResultsViewerWidget::rebuildSlice() {
     } else if (axis_ == Axis::Y) {
         int j = std::clamp(static_cast<int>(std::lround(slicePosition_ * (ny - 1))), 0, ny - 1);
         double y = j * reader_->dy();
-        extract(nx, nz, [&](int i, int k) { return (*field)[idx(i, j, k)]; }); // u<->i(nx), v<->k(nz)
+        extract(nx, nz, [&](int i, int k) { return field[idx(i, j, k)]; }); // u<->i(nx), v<->k(nz)
         corners = {
             0.0f, static_cast<float>(y), 0.0f, 0.0f, 0.0f,
             static_cast<float>(Lx), static_cast<float>(y), 0.0f, 1.0f, 0.0f,
@@ -360,7 +399,7 @@ void ResultsViewerWidget::rebuildSlice() {
     } else {
         int k = std::clamp(static_cast<int>(std::lround(slicePosition_ * (nz - 1))), 0, nz - 1);
         double z = k * reader_->dz();
-        extract(nx, ny, [&](int i, int j) { return (*field)[idx(i, j, k)]; }); // u<->i(nx), v<->j(ny)
+        extract(nx, ny, [&](int i, int j) { return field[idx(i, j, k)]; }); // u<->i(nx), v<->j(ny)
         corners = {
             0.0f, 0.0f, static_cast<float>(z), 0.0f, 0.0f,
             static_cast<float>(Lx), 0.0f, static_cast<float>(z), 1.0f, 0.0f,
@@ -405,8 +444,19 @@ bool ResultsViewerWidget::isSolidCell(int i, int j, int k) const {
     return idx < currentFrame_.obstacle.size() && currentFrame_.obstacle[idx] != 0.0f;
 }
 
-QVector3D ResultsViewerWidget::sampleVelocity(double x, double y, double z) const {
-    if (!haveFrame_ || !reader_) return {};
+const std::vector<double>& ResultsViewerWidget::fieldArray(ScalarField field) const {
+    switch (field) {
+        case ScalarField::VelocityMagnitude: return currentFrame_.velocity_magnitude;
+        case ScalarField::Pressure: return currentFrame_.pressure;
+        case ScalarField::VelocityU: return currentFrame_.velocity_u;
+        case ScalarField::VelocityV: return currentFrame_.velocity_v;
+        case ScalarField::VelocityW: return currentFrame_.velocity_w;
+    }
+    return currentFrame_.velocity_magnitude;
+}
+
+double ResultsViewerWidget::sampleScalar(const std::vector<double>& field, double x, double y, double z) const {
+    if (!haveFrame_ || !reader_) return 0.0;
     int nx = reader_->nx(), ny = reader_->ny(), nz = reader_->nz();
     double dx = reader_->dx(), dy = reader_->dy(), dz = reader_->dz();
 
@@ -421,26 +471,28 @@ QVector3D ResultsViewerWidget::sampleVelocity(double x, double y, double z) cons
     double tx = fi - i0, ty = fj - j0, tz = fk - k0;
 
     auto clampi = [](int v, int n) { return std::clamp(v, 0, n - 1); };
-    auto at = [&](const std::vector<double>& field, int i, int j, int k) {
+    auto at = [&](int i, int j, int k) {
         i = clampi(i, nx);
         j = clampi(j, ny);
         k = clampi(k, nz);
         std::size_t idx = static_cast<std::size_t>(i) * static_cast<std::size_t>(ny) * static_cast<std::size_t>(nz)
                          + static_cast<std::size_t>(j) * static_cast<std::size_t>(nz) + static_cast<std::size_t>(k);
-        return field[idx];
+        return idx < field.size() ? field[idx] : 0.0;
     };
-    auto trilerp = [&](const std::vector<double>& field) {
-        double c00 = at(field, i0, j0, k0) * (1 - tx) + at(field, i0 + 1, j0, k0) * tx;
-        double c01 = at(field, i0, j0, k0 + 1) * (1 - tx) + at(field, i0 + 1, j0, k0 + 1) * tx;
-        double c10 = at(field, i0, j0 + 1, k0) * (1 - tx) + at(field, i0 + 1, j0 + 1, k0) * tx;
-        double c11 = at(field, i0, j0 + 1, k0 + 1) * (1 - tx) + at(field, i0 + 1, j0 + 1, k0 + 1) * tx;
-        double c0 = c00 * (1 - ty) + c10 * ty;
-        double c1 = c01 * (1 - ty) + c11 * ty;
-        return c0 * (1 - tz) + c1 * tz;
-    };
-    return QVector3D(static_cast<float>(trilerp(currentFrame_.velocity_u)),
-                      static_cast<float>(trilerp(currentFrame_.velocity_v)),
-                      static_cast<float>(trilerp(currentFrame_.velocity_w)));
+    double c00 = at(i0, j0, k0) * (1 - tx) + at(i0 + 1, j0, k0) * tx;
+    double c01 = at(i0, j0, k0 + 1) * (1 - tx) + at(i0 + 1, j0, k0 + 1) * tx;
+    double c10 = at(i0, j0 + 1, k0) * (1 - tx) + at(i0 + 1, j0 + 1, k0) * tx;
+    double c11 = at(i0, j0 + 1, k0 + 1) * (1 - tx) + at(i0 + 1, j0 + 1, k0 + 1) * tx;
+    double c0 = c00 * (1 - ty) + c10 * ty;
+    double c1 = c01 * (1 - ty) + c11 * ty;
+    return c0 * (1 - tz) + c1 * tz;
+}
+
+QVector3D ResultsViewerWidget::sampleVelocity(double x, double y, double z) const {
+    if (!haveFrame_ || !reader_) return {};
+    return QVector3D(static_cast<float>(sampleScalar(currentFrame_.velocity_u, x, y, z)),
+                      static_cast<float>(sampleScalar(currentFrame_.velocity_v, x, y, z)),
+                      static_cast<float>(sampleScalar(currentFrame_.velocity_w, x, y, z)));
 }
 
 std::vector<QVector3D> ResultsViewerWidget::traceStreamline(QVector3D start) const {
@@ -697,13 +749,9 @@ void ResultsViewerWidget::paintGL() {
     QMatrix4x4 mvp = projectionMatrix() * viewMatrix();
 
     if (haveMesh_) {
-        QColor meshColor(theme_.accent);
         meshProgram_->bind();
         meshProgram_->setUniformValue("uMvp", mvp);
         meshProgram_->setUniformValue("uLightDir", QVector3D(-0.4f, -1.0f, -0.3f));
-        meshProgram_->setUniformValue("uColor", QVector3D(static_cast<float>(meshColor.redF()),
-                                                            static_cast<float>(meshColor.greenF()),
-                                                            static_cast<float>(meshColor.blueF())));
         meshVao_.bind();
         glDrawArrays(GL_TRIANGLES, 0, meshVertexCount_);
         meshVao_.release();

@@ -95,8 +95,14 @@ private:
     void rebuildArrows();
     [[nodiscard]] QMatrix4x4 viewMatrix() const;
     [[nodiscard]] QMatrix4x4 projectionMatrix() const;
-    // Trilinear-interpolated velocity at a point in domain-space
-    // coordinates (same [0,Lx]x[0,Ly]x[0,Lz] frame as the slice quads).
+    // Trilinear-interpolated value of one field array at a point in
+    // domain-space coordinates (same [0,Lx]x[0,Ly]x[0,Lz] frame as the
+    // slice quads) -- shared by sampleVelocity (u/v/w) and the mesh
+    // surface's own near-wall field sampling.
+    [[nodiscard]] double sampleScalar(const std::vector<double>& field, double x, double y, double z) const;
+    // Which of currentFrame_'s arrays a ScalarField selects -- shared by
+    // rebuildSlice and rebuildMeshGeometry so both read the same field.
+    [[nodiscard]] const std::vector<double>& fieldArray(ScalarField field) const;
     [[nodiscard]] QVector3D sampleVelocity(double x, double y, double z) const;
     [[nodiscard]] bool isSolidCell(int i, int j, int k) const;
     // One streamline's worth of RK4-traced points, domain-space, starting
