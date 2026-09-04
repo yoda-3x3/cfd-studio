@@ -557,10 +557,17 @@ void ResultsViewerWidget::rebuildStreamlines() {
     // margin) rather than spreading it uniformly across the whole inflow
     // face: in a typical external-flow domain the object is a small
     // fraction of that face, so uniform seeding mostly produced lines that
-    // never passed close enough to the object to visibly deflect.
+    // never passed close enough to the object to visibly deflect. The same
+    // margined box is reused below to drop any traced line that still
+    // never actually enters it -- a dense seed grid otherwise leaves a lot
+    // of "extra" streamlines that run straight through empty space well
+    // off to the side of the object.
     double yLo = 0.0, yHi = Ly, zLo = 0.0, zHi = Lz;
+    bool haveProximityBox = false;
+    QVector3D proxMin, proxMax;
     if (haveMesh_) {
         auto b = mesh_.bounds();
+        double marginX = std::max(0.15 * (b.max.x - b.min.x), 0.05 * Lx);
         double marginY = std::max(0.15 * (b.max.y - b.min.y), 0.05 * Ly);
         double marginZ = std::max(0.15 * (b.max.z - b.min.z), 0.05 * Lz);
         double loY = std::clamp(b.min.y - marginY, 0.0, Ly);
@@ -569,7 +576,23 @@ void ResultsViewerWidget::rebuildStreamlines() {
         double hiZ = std::clamp(b.max.z + marginZ, 0.0, Lz);
         if (hiY > loY) { yLo = loY; yHi = hiY; }
         if (hiZ > loZ) { zLo = loZ; zHi = hiZ; }
+
+        proxMin = QVector3D(static_cast<float>(b.min.x - marginX), static_cast<float>(b.min.y - marginY),
+                             static_cast<float>(b.min.z - marginZ));
+        proxMax = QVector3D(static_cast<float>(b.max.x + marginX), static_cast<float>(b.max.y + marginY),
+                             static_cast<float>(b.max.z + marginZ));
+        haveProximityBox = true;
     }
+    auto passesNearObject = [&](const std::vector<QVector3D>& line) {
+        if (!haveProximityBox) return true; // no mesh bounds available -- keep everything
+        for (const auto& p : line) {
+            if (p.x() >= proxMin.x() && p.x() <= proxMax.x() && p.y() >= proxMin.y() && p.y() <= proxMax.y() &&
+                p.z() >= proxMin.z() && p.z() <= proxMax.z()) {
+                return true;
+            }
+        }
+        return false;
+    };
 
     std::vector<std::vector<QVector3D>> lines;
     for (int a = 0; a < kSeedGrid; ++a) {
@@ -582,7 +605,7 @@ void ResultsViewerWidget::rebuildStreamlines() {
             int k = static_cast<int>(seed.z() / reader_->dz());
             if (isSolidCell(i, j, k)) continue;
             auto line = traceStreamline(seed);
-            if (line.size() >= 2) lines.push_back(std::move(line));
+            if (line.size() >= 2 && passesNearObject(line)) lines.push_back(std::move(line));
         }
     }
 
