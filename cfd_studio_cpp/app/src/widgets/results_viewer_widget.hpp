@@ -136,7 +136,10 @@ private:
     int arrowVertexCount_ = 0;
     bool showArrows_ = false;
     bool arrowsDirty_ = false;
-    int vectorDensity_ = 8;
+    // Denser default than the original walking-skeleton pass -- a sparse
+    // grid mostly missed the object; a denser sheet of lines hugging its
+    // silhouette reads much closer to typical CFD streamline renders.
+    int vectorDensity_ = 18;
 
     std::shared_ptr<cfd::io::ResultsCacheReader> reader_;
     cfd::io::ResultsFrame currentFrame_;

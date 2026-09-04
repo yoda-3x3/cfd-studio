@@ -257,7 +257,7 @@ void ResultsViewerWidget::setShowVelocityArrows(bool show) {
 }
 
 void ResultsViewerWidget::setVectorDensity(int density) {
-    vectorDensity_ = std::clamp(density, 2, 30);
+    vectorDensity_ = std::clamp(density, 2, 60);
     streamlinesDirty_ = true;
     arrowsDirty_ = true;
     update();
@@ -552,7 +552,7 @@ void ResultsViewerWidget::rebuildStreamlines() {
     for (const auto& line : lines) {
         for (const auto& p : line) {
             float speed = sampleVelocity(p.x(), p.y(), p.z()).length();
-            QColor c = colormap_sample((speed - vmin) / range);
+            QColor c = flow_colormap_sample((speed - vmin) / range);
             vertexData.insert(vertexData.end(), {p.x(), p.y(), p.z(), static_cast<float>(c.redF()),
                                                   static_cast<float>(c.greenF()), static_cast<float>(c.blueF())});
         }
@@ -633,7 +633,7 @@ void ResultsViewerWidget::rebuildArrows() {
         if (speed < 1e-6f) continue;
         QVector3D dir = s.vel / speed;
         float len = std::min(speed / vmax, 1.0f) * maxArrowLen;
-        QColor c = colormap_sample((speed - vmin) / range);
+        QColor c = flow_colormap_sample((speed - vmin) / range);
         QVector3D color(static_cast<float>(c.redF()), static_cast<float>(c.greenF()), static_cast<float>(c.blueF()));
 
         QVector3D tip = s.pos + dir * len;
@@ -727,6 +727,11 @@ void ResultsViewerWidget::paintGL() {
         vectorProgram_->setUniformValue("uMvp", mvp);
 
         if (showStreamlines_ && !streamlineRunLengths_.empty()) {
+            // Wider than the 1px default so a dense set reads as a flowing
+            // ribbon sheet rather than a thin wireframe tangle -- how wide
+            // a line actually renders past 1px is driver-dependent in a
+            // core profile, so this is a best-effort bump, not guaranteed.
+            glLineWidth(2.0f);
             streamlineVao_.bind();
             int offset = 0;
             for (int count : streamlineRunLengths_) {
@@ -734,6 +739,7 @@ void ResultsViewerWidget::paintGL() {
                 offset += count;
             }
             streamlineVao_.release();
+            glLineWidth(1.0f);
         }
         if (showArrows_ && arrowVertexCount_ > 0) {
             arrowVao_.bind();
